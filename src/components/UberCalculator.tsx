@@ -1,191 +1,348 @@
-import { useState } from "react";
-import { Card } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Calculator, Car, Fuel, DollarSign } from "lucide-react";
-
-interface CalculationData {
-  totalEarnings: number;
-  kmDriven: number;
-  kmPerLiter: number;
-  fuelPrice: number;
-}
-
-interface CalculationResults {
-  litersConsumed: number;
-  fuelCost: number;
-  netProfit: number;
-}
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { Calculator, Car, DollarSign, Fuel, History, LogOut } from "lucide-react";
+import { User, Session } from "@supabase/supabase-js";
 
 const UberCalculator = () => {
-  const [data, setData] = useState<CalculationData>({
-    totalEarnings: 0,
-    kmDriven: 0,
-    kmPerLiter: 0,
-    fuelPrice: 0,
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [totalEarnings, setTotalEarnings] = useState<string>("");
+  const [kmDriven, setKmDriven] = useState<string>("");
+  const [kmPerLiter, setKmPerLiter] = useState<string>("");
+  const [fuelPrice, setFuelPrice] = useState<string>("");
+  const [results, setResults] = useState<{
+    fuelLiters: number;
+    fuelCost: number;
+    netProfit: number;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
+  
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
-  const [results, setResults] = useState<CalculationResults | null>(null);
+  useEffect(() => {
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (!session?.user && event !== 'INITIAL_SESSION') {
+          navigate('/auth');
+        }
+      }
+    );
 
-  const handleInputChange = (field: keyof CalculationData, value: string) => {
-    const numValue = parseFloat(value) || 0;
-    setData(prev => ({ ...prev, [field]: numValue }));
-  };
-
-  const calculateResults = () => {
-    const litersConsumed = data.kmDriven / data.kmPerLiter;
-    const fuelCost = litersConsumed * data.fuelPrice;
-    const netProfit = data.totalEarnings - fuelCost;
-
-    setResults({
-      litersConsumed: Math.round(litersConsumed * 100) / 100,
-      fuelCost: Math.round(fuelCost * 100) / 100,
-      netProfit: Math.round(netProfit * 100) / 100,
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (!session?.user) {
+        navigate('/auth');
+      }
     });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  const calculateProfit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const earnings = parseFloat(totalEarnings);
+    const km = parseFloat(kmDriven);
+    const efficiency = parseFloat(kmPerLiter);
+    const price = parseFloat(fuelPrice);
+
+    if (isNaN(earnings) || isNaN(km) || isNaN(efficiency) || isNaN(price)) {
+      toast({
+        title: "Erro nos dados",
+        description: "Por favor, preencha todos os campos com valores válidos",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const fuelLiters = km / efficiency;
+    const fuelCost = fuelLiters * price;
+    const netProfit = earnings - fuelCost;
+
+    const calculationResults = {
+      fuelLiters: Number(fuelLiters.toFixed(2)),
+      fuelCost: Number(fuelCost.toFixed(2)),
+      netProfit: Number(netProfit.toFixed(2)),
+    };
+
+    setResults(calculationResults);
+
+    // Save to database
+    if (user) {
+      setSaving(true);
+      try {
+        const { error } = await supabase
+          .from('calculations')
+          .insert({
+            user_id: user.id,
+            date: new Date().toISOString().split('T')[0], // Today's date
+            total_earnings: earnings,
+            km_driven: km,
+            km_per_liter: efficiency,
+            fuel_price: price,
+            fuel_liters: calculationResults.fuelLiters,
+            fuel_cost: calculationResults.fuelCost,
+            net_profit: calculationResults.netProfit,
+          });
+
+        if (error) throw error;
+
+        toast({
+          title: "Cálculo salvo!",
+          description: "Seu cálculo foi salvo no histórico com sucesso",
+        });
+      } catch (error: any) {
+        toast({
+          title: "Erro ao salvar",
+          description: "Não foi possível salvar o cálculo no histórico",
+          variant: "destructive",
+        });
+      } finally {
+        setSaving(false);
+      }
+    }
   };
 
-  const canCalculate = data.totalEarnings > 0 && data.kmDriven > 0 && data.kmPerLiter > 0 && data.fuelPrice > 0;
+  const handleSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      toast({
+        title: "Logout realizado",
+        description: "Você foi desconectado com sucesso",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro no logout",
+        description: error.message || "Ocorreu um erro inesperado",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
+
+  if (!user) {
+    return null; // Will redirect to auth page
+  }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-2xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="flex items-center justify-center gap-2 text-primary">
-            <Car className="w-8 h-8" />
-            <h1 className="text-3xl font-bold">Calculadora Uber</h1>
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex justify-between items-start mb-8">
+          <div className="text-center flex-1">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-4">
+              Calculadora Uber
+            </h1>
+            <p className="text-muted-foreground text-lg">
+              Calcule seus ganhos líquidos descontando combustível e custos
+            </p>
           </div>
-          <p className="text-muted-foreground">
-            Calcule seus ganhos líquidos e gasto com combustível
-          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate('/history')}>
+              <History className="w-4 h-4 mr-2" />
+              Histórico
+            </Button>
+            <Button variant="outline" onClick={handleSignOut}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Sair
+            </Button>
+          </div>
         </div>
 
-        {/* Input Form */}
-        <Card className="p-6 space-y-4 shadow-[var(--shadow-card)]">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Calculator className="w-5 h-5" />
-            Dados do Dia
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="totalEarnings">Valor Total Faturado (R$)</Label>
-              <Input
-                id="totalEarnings"
-                type="number"
-                step="0.01"
-                placeholder="0,00"
-                value={data.totalEarnings || ""}
-                onChange={(e) => handleInputChange("totalEarnings", e.target.value)}
-                className="text-lg"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="kmDriven">Quilômetros Rodados</Label>
-              <Input
-                id="kmDriven"
-                type="number"
-                step="0.1"
-                placeholder="0"
-                value={data.kmDriven || ""}
-                onChange={(e) => handleInputChange("kmDriven", e.target.value)}
-                className="text-lg"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="kmPerLiter">KM por Litro do Carro</Label>
-              <Input
-                id="kmPerLiter"
-                type="number"
-                step="0.1"
-                placeholder="0,0"
-                value={data.kmPerLiter || ""}
-                onChange={(e) => handleInputChange("kmPerLiter", e.target.value)}
-                className="text-lg"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="fuelPrice">Preço do Combustível (R$/L)</Label>
-              <Input
-                id="fuelPrice"
-                type="number"
-                step="0.01"
-                placeholder="0,00"
-                value={data.fuelPrice || ""}
-                onChange={(e) => handleInputChange("fuelPrice", e.target.value)}
-                className="text-lg"
-              />
-            </div>
-          </div>
-          
-          <Button
-            onClick={calculateResults}
-            disabled={!canCalculate}
-            className="w-full text-lg py-6"
-            size="lg"
-          >
-            <Calculator className="w-5 h-5 mr-2" />
-            Calcular Relatório
-          </Button>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <Card className="shadow-[var(--shadow-card)]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calculator className="w-5 h-5" />
+                Dados do Dia
+              </CardTitle>
+              <CardDescription>
+                Preencha as informações do seu dia de trabalho
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={calculateProfit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="totalEarnings" className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4" />
+                    Valor Total Faturado (R$)
+                  </Label>
+                  <Input
+                    id="totalEarnings"
+                    type="number"
+                    step="0.01"
+                    placeholder="Ex: 250.00"
+                    value={totalEarnings}
+                    onChange={(e) => setTotalEarnings(e.target.value)}
+                    required
+                    className="text-lg"
+                  />
+                </div>
 
-        {/* Results */}
-        {results && (
-          <Card className="p-6 space-y-4 shadow-[var(--shadow-elevated)]">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <DollarSign className="w-5 h-5" />
-              Relatório do Dia
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-muted rounded-lg p-4 text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Fuel className="w-5 h-5 text-warning" />
-                  <span className="font-medium">Combustível Consumido</span>
+                <div className="space-y-2">
+                  <Label htmlFor="kmDriven" className="flex items-center gap-2">
+                    <Car className="w-4 h-4" />
+                    Quilômetros Rodados
+                  </Label>
+                  <Input
+                    id="kmDriven"
+                    type="number"
+                    step="0.1"
+                    placeholder="Ex: 180"
+                    value={kmDriven}
+                    onChange={(e) => setKmDriven(e.target.value)}
+                    required
+                    className="text-lg"
+                  />
                 </div>
-                <p className="text-2xl font-bold text-warning">
-                  {results.litersConsumed.toFixed(2)} L
-                </p>
-              </div>
-              
-              <div className="bg-destructive/10 rounded-lg p-4 text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <DollarSign className="w-5 h-5 text-destructive" />
-                  <span className="font-medium">Gasto com Combustível</span>
+
+                <div className="space-y-2">
+                  <Label htmlFor="kmPerLiter" className="flex items-center gap-2">
+                    <Fuel className="w-4 h-4" />
+                    KM por Litro do Carro
+                  </Label>
+                  <Input
+                    id="kmPerLiter"
+                    type="number"
+                    step="0.1"
+                    placeholder="Ex: 12.5"
+                    value={kmPerLiter}
+                    onChange={(e) => setKmPerLiter(e.target.value)}
+                    required
+                    className="text-lg"
+                  />
                 </div>
-                <p className="text-2xl font-bold text-destructive">
-                  R$ {results.fuelCost.toFixed(2)}
-                </p>
-              </div>
-              
-              <div className={`rounded-lg p-4 text-center ${results.netProfit >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <DollarSign className={`w-5 h-5 ${results.netProfit >= 0 ? 'text-success' : 'text-destructive'}`} />
-                  <span className="font-medium">Lucro Líquido</span>
+
+                <div className="space-y-2">
+                  <Label htmlFor="fuelPrice" className="flex items-center gap-2">
+                    <Fuel className="w-4 h-4" />
+                    Preço do Combustível (R$/L)
+                  </Label>
+                  <Input
+                    id="fuelPrice"
+                    type="number"
+                    step="0.01"
+                    placeholder="Ex: 5.50"
+                    value={fuelPrice}
+                    onChange={(e) => setFuelPrice(e.target.value)}
+                    required
+                    className="text-lg"
+                  />
                 </div>
-                <p className={`text-2xl font-bold ${results.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  R$ {results.netProfit.toFixed(2)}
-                </p>
-              </div>
-            </div>
-            
-            <div className="bg-card border rounded-lg p-4">
-              <h3 className="font-semibold mb-2">Resumo:</h3>
-              <div className="space-y-1 text-sm text-muted-foreground">
-                <p>• Você faturou R$ {data.totalEarnings.toFixed(2)} hoje</p>
-                <p>• Rodou {data.kmDriven} km consumindo {results.litersConsumed.toFixed(2)} litros</p>
-                <p>• Gastou R$ {results.fuelCost.toFixed(2)} com combustível</p>
-                <p className={results.netProfit >= 0 ? 'text-success font-medium' : 'text-destructive font-medium'}>
-                  • Seu lucro líquido foi de R$ {results.netProfit.toFixed(2)}
-                </p>
-              </div>
-            </div>
+
+                <Button type="submit" className="w-full" size="lg" disabled={saving}>
+                  <Calculator className="mr-2 h-4 w-4" />
+                  {saving ? "Salvando..." : "Calcular Ganhos"}
+                </Button>
+              </form>
+            </CardContent>
           </Card>
-        )}
+
+          {results && (
+            <Card className="shadow-[var(--shadow-elevated)]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5" />
+                  Relatório do Dia
+                </CardTitle>
+                <CardDescription>
+                  Resumo dos seus ganhos e custos
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="bg-warning/10 rounded-lg p-4 text-center border border-warning/20">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <Fuel className="w-5 h-5 text-warning" />
+                      <span className="font-medium">Combustível Consumido</span>
+                    </div>
+                    <p className="text-2xl font-bold text-warning">
+                      {results.fuelLiters} Litros
+                    </p>
+                  </div>
+
+                  <div className="bg-destructive/10 rounded-lg p-4 text-center border border-destructive/20">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <DollarSign className="w-5 h-5 text-destructive" />
+                      <span className="font-medium">Gasto com Combustível</span>
+                    </div>
+                    <p className="text-2xl font-bold text-destructive">
+                      {formatCurrency(results.fuelCost)}
+                    </p>
+                  </div>
+
+                  <div className={`rounded-lg p-4 text-center border ${
+                    results.netProfit >= 0 
+                      ? 'bg-success/10 border-success/20' 
+                      : 'bg-destructive/10 border-destructive/20'
+                  }`}>
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <DollarSign className={`w-5 h-5 ${results.netProfit >= 0 ? 'text-success' : 'text-destructive'}`} />
+                      <span className="font-medium">Lucro Líquido</span>
+                    </div>
+                    <p className={`text-3xl font-bold ${results.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                      {formatCurrency(results.netProfit)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-card border rounded-lg p-4">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    <Car className="w-4 h-4" />
+                    Resumo Detalhado
+                  </h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Faturamento total:</span>
+                      <span className="font-medium">{formatCurrency(parseFloat(totalEarnings) || 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Quilometragem:</span>
+                      <span className="font-medium">{parseFloat(kmDriven) || 0} km</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Eficiência do veículo:</span>
+                      <span className="font-medium">{parseFloat(kmPerLiter) || 0} km/l</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Preço do combustível:</span>
+                      <span className="font-medium">{formatCurrency(parseFloat(fuelPrice) || 0)}/l</span>
+                    </div>
+                    <div className="border-t pt-2 mt-3">
+                      <div className="flex justify-between text-base font-semibold">
+                        <span>Resultado final:</span>
+                        <span className={results.netProfit >= 0 ? 'text-success' : 'text-destructive'}>
+                          {formatCurrency(results.netProfit)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );
