@@ -14,7 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      calculations: {
+        Row: {
+          created_at: string
+          date: string
+          fuel_cost: number
+          fuel_liters: number
+          fuel_price: number
+          id: string
+          km_driven: number
+          km_per_liter: number
+          net_profit: number
+          total_earnings: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          fuel_cost: number
+          fuel_liters: number
+          fuel_price: number
+          id?: string
+          km_driven: number
+          km_per_liter: number
+          net_profit: number
+          total_earnings: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          fuel_cost?: number
+          fuel_liters?: number
+          fuel_price?: number
+          id?: string
+          km_driven?: number
+          km_per_liter?: number
+          net_profit?: number
+          total_earnings?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
