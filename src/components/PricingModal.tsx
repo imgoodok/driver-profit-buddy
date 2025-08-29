@@ -2,6 +2,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, Star, Zap } from "lucide-react";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface PricingModalProps {
   isOpen: boolean;
@@ -10,6 +13,9 @@ interface PricingModalProps {
 }
 
 const PricingModal = ({ isOpen, onClose, onSelectPlan }: PricingModalProps) => {
+  const [loading, setLoading] = useState<string | null>(null);
+  const { toast } = useToast();
+  
   const monthlyPrice = 8.90;
   const annualPrice = 74.90;
   const monthlyTotal = monthlyPrice * 12;
@@ -24,6 +30,36 @@ const PricingModal = ({ isOpen, onClose, onSelectPlan }: PricingModalProps) => {
     "Suporte prioritário",
     "Sem anúncios"
   ];
+
+  const handlePlanSelection = async (plan: 'monthly' | 'annual') => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.user) {
+      onSelectPlan(); // Redirect to auth page
+      return;
+    }
+
+    setLoading(plan);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { plan }
+      });
+
+      if (error) throw error;
+
+      // Open Stripe checkout in a new tab
+      window.open(data.url, '_blank');
+      onClose();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao processar pagamento",
+        description: error.message || "Tente novamente em alguns instantes",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(null);
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -64,9 +100,10 @@ const PricingModal = ({ isOpen, onClose, onSelectPlan }: PricingModalProps) => {
               <Button 
                 className="w-full" 
                 variant="outline"
-                onClick={onSelectPlan}
+                onClick={() => handlePlanSelection('monthly')}
+                disabled={loading === 'monthly'}
               >
-                Escolher Mensal
+                {loading === 'monthly' ? 'Processando...' : 'Escolher Mensal'}
               </Button>
             </CardContent>
           </Card>
@@ -105,9 +142,10 @@ const PricingModal = ({ isOpen, onClose, onSelectPlan }: PricingModalProps) => {
               </ul>
               <Button 
                 className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90" 
-                onClick={onSelectPlan}
+                onClick={() => handlePlanSelection('annual')}
+                disabled={loading === 'annual'}
               >
-                Escolher Anual
+                {loading === 'annual' ? 'Processando...' : 'Escolher Anual'}
               </Button>
             </CardContent>
           </Card>
