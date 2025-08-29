@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Calculator, Car, DollarSign, Fuel, History, LogOut } from "lucide-react";
+import { Calculator, Car, DollarSign, Fuel, History, LogOut, User as UserIcon } from "lucide-react";
 import { User, Session } from "@supabase/supabase-js";
+import PricingModal from "./PricingModal";
 
 const UberCalculator = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -22,6 +23,8 @@ const UberCalculator = () => {
     netProfit: number;
   } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [usageCount, setUsageCount] = useState(0);
+  const [showPricingModal, setShowPricingModal] = useState(false);
   
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -32,10 +35,6 @@ const UberCalculator = () => {
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
-        if (!session?.user && event !== 'INITIAL_SESSION') {
-          navigate('/auth');
-        }
       }
     );
 
@@ -43,14 +42,16 @@ const UberCalculator = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
-      if (!session?.user) {
-        navigate('/auth');
-      }
     });
 
+    // Load usage count from localStorage
+    const savedUsageCount = localStorage.getItem('uber-calculator-usage');
+    if (savedUsageCount) {
+      setUsageCount(parseInt(savedUsageCount, 10));
+    }
+
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, []);
 
   const calculateProfit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +82,19 @@ const UberCalculator = () => {
 
     setResults(calculationResults);
 
-    // Save to database
+    // Update usage count for non-logged users
+    if (!user) {
+      const newUsageCount = usageCount + 1;
+      setUsageCount(newUsageCount);
+      localStorage.setItem('uber-calculator-usage', newUsageCount.toString());
+      
+      // Show pricing modal after 3 uses
+      if (newUsageCount >= 3) {
+        setShowPricingModal(true);
+      }
+    }
+
+    // Save to database only if user is logged in
     if (user) {
       setSaving(true);
       try {
@@ -114,6 +127,11 @@ const UberCalculator = () => {
       } finally {
         setSaving(false);
       }
+    } else {
+      toast({
+        title: "Cálculo realizado!",
+        description: "Faça login para salvar seus cálculos no histórico",
+      });
     }
   };
 
@@ -142,9 +160,6 @@ const UberCalculator = () => {
     }).format(value);
   };
 
-  if (!user) {
-    return null; // Will redirect to auth page
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
@@ -159,14 +174,23 @@ const UberCalculator = () => {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate('/history')}>
-              <History className="w-4 h-4 mr-2" />
-              Histórico
-            </Button>
-            <Button variant="outline" onClick={handleSignOut}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Sair
-            </Button>
+            {user ? (
+              <>
+                <Button variant="outline" onClick={() => navigate('/history')}>
+                  <History className="w-4 h-4 mr-2" />
+                  Histórico
+                </Button>
+                <Button variant="outline" onClick={handleSignOut}>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sair
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" onClick={() => navigate('/auth')}>
+                <UserIcon className="w-4 h-4 mr-2" />
+                Entrar
+              </Button>
+            )}
           </div>
         </div>
 
@@ -343,6 +367,12 @@ const UberCalculator = () => {
             </Card>
           )}
         </div>
+
+        <PricingModal
+          isOpen={showPricingModal}
+          onClose={() => setShowPricingModal(false)}
+          onSelectPlan={() => navigate('/auth')}
+        />
       </div>
     </div>
   );
