@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Calculator, Car, DollarSign, Fuel, History, LogOut, User as UserIcon } from "lucide-react";
+import { Calculator, Car, DollarSign, Fuel, History, LogOut, User as UserIcon, Crown } from "lucide-react";
 import { User, Session } from "@supabase/supabase-js";
 import PricingModal from "./PricingModal";
+import { useSubscription } from "@/hooks/use-subscription";
 
 const UberCalculator = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -32,6 +33,8 @@ const UberCalculator = () => {
   
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const { subscribed, subscription_tier, loading: subLoading } = useSubscription(user);
 
   useEffect(() => {
     // Set up auth state listener
@@ -59,6 +62,17 @@ const UberCalculator = () => {
 
   const calculateProfit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Verificar se o usuário tem acesso PRO
+    if (user && !subscribed) {
+      toast({
+        title: "Acesso Restrito",
+        description: "Você precisa de uma assinatura PRO para fazer cálculos ilimitados",
+        variant: "destructive",
+      });
+      navigate('/subscription');
+      return;
+    }
     
     const earnings = parseFloat(totalEarnings);
     const km = parseFloat(kmDriven);
@@ -180,6 +194,18 @@ const UberCalculator = () => {
           <div className="flex gap-2">
             {user ? (
               <>
+                {!subscribed && (
+                  <Button variant="default" onClick={() => navigate('/subscription')}>
+                    <Crown className="w-4 h-4 mr-2" />
+                    Assinar PRO
+                  </Button>
+                )}
+                {subscribed && (
+                  <Button variant="outline" onClick={() => navigate('/subscription')}>
+                    <Crown className="w-4 h-4 mr-2" />
+                    {subscription_tier || 'PRO'}
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => navigate('/history')}>
                   <History className="w-4 h-4 mr-2" />
                   Histórico

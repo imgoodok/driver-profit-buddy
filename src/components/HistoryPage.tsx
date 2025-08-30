@@ -8,8 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Edit, Calculator, ArrowLeft } from "lucide-react";
+import { Trash2, Edit, Calculator, ArrowLeft, Crown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { User, Session } from "@supabase/supabase-js";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSubscription } from "@/hooks/use-subscription";
 
 interface Calculation {
   id: string;
@@ -24,6 +27,8 @@ interface Calculation {
 }
 
 const HistoryPage = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [calculations, setCalculations] = useState<Calculation[]>([]);
   const [filteredCalculations, setFilteredCalculations] = useState<Calculation[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -39,9 +44,31 @@ const HistoryPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  const { subscribed, subscription_tier } = useSubscription(user);
+
   useEffect(() => {
-    fetchCalculations();
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchCalculations();
+    }
+  }, [user]);
 
   useEffect(() => {
     applyDateFilter();
@@ -234,36 +261,18 @@ const HistoryPage = () => {
             <h1 className="text-3xl font-bold">Histórico de Cálculos</h1>
           </div>
           <div className="flex gap-2">
-            <div className="flex gap-1">
-              <Button
-                variant={dateFilter === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setDateFilter('all')}
-              >
-                Todos
+            {user && !subscribed && (
+              <Button variant="default" onClick={() => navigate('/subscription')}>
+                <Crown className="w-4 h-4 mr-2" />
+                Assinar PRO
               </Button>
-              <Button
-                variant={dateFilter === '7' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setDateFilter('7')}
-              >
-                7 dias
+            )}
+            {user && subscribed && (
+              <Button variant="outline" onClick={() => navigate('/subscription')}>
+                <Crown className="w-4 h-4 mr-2" />
+                {subscription_tier || 'PRO'}
               </Button>
-              <Button
-                variant={dateFilter === '15' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setDateFilter('15')}
-              >
-                15 dias
-              </Button>
-              <Button
-                variant={dateFilter === '30' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setDateFilter('30')}
-              >
-                30 dias
-              </Button>
-            </div>
+            )}
             <Button onClick={() => navigate('/')}>
               <Calculator className="w-4 h-4 mr-2" />
               Nova Calculação
@@ -306,12 +315,25 @@ const HistoryPage = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Histórico Completo</CardTitle>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  checked={filteredCalculations.length > 0 && selectedIds.size === filteredCalculations.length}
-                  onCheckedChange={selectAll}
-                />
-                <Label>Selecionar todos ({filteredCalculations.length})</Label>
+              <div className="flex items-center gap-4">
+                <Select value={dateFilter} onValueChange={(value: 'all' | '7' | '15' | '30') => setDateFilter(value)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="7">7 dias</SelectItem>
+                    <SelectItem value="15">15 dias</SelectItem>
+                    <SelectItem value="30">30 dias</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={filteredCalculations.length > 0 && selectedIds.size === filteredCalculations.length}
+                    onCheckedChange={selectAll}
+                  />
+                  <Label>Selecionar todos ({filteredCalculations.length})</Label>
+                </div>
               </div>
             </div>
           </CardHeader>
