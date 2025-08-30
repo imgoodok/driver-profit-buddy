@@ -25,8 +25,10 @@ interface Calculation {
 
 const HistoryPage = () => {
   const [calculations, setCalculations] = useState<Calculation[]>([]);
+  const [filteredCalculations, setFilteredCalculations] = useState<Calculation[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [dateFilter, setDateFilter] = useState<'all' | '7' | '15' | '30'>('all');
   const [editingCalc, setEditingCalc] = useState<Calculation | null>(null);
   const [editFormData, setEditFormData] = useState({
     total_earnings: "",
@@ -40,6 +42,10 @@ const HistoryPage = () => {
   useEffect(() => {
     fetchCalculations();
   }, []);
+
+  useEffect(() => {
+    applyDateFilter();
+  }, [calculations, dateFilter]);
 
   const fetchCalculations = async () => {
     try {
@@ -59,6 +65,24 @@ const HistoryPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyDateFilter = () => {
+    if (dateFilter === 'all') {
+      setFilteredCalculations(calculations);
+      return;
+    }
+
+    const days = parseInt(dateFilter);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    const filtered = calculations.filter(calc => {
+      const calcDate = new Date(calc.date + 'T00:00:00');
+      return calcDate >= cutoffDate;
+    });
+    
+    setFilteredCalculations(filtered);
   };
 
   const deleteCalculation = async (id: string) => {
@@ -147,15 +171,15 @@ const HistoryPage = () => {
   };
 
   const selectAll = () => {
-    if (selectedIds.size === calculations.length) {
+    if (selectedIds.size === filteredCalculations.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(calculations.map(calc => calc.id)));
+      setSelectedIds(new Set(filteredCalculations.map(calc => calc.id)));
     }
   };
 
   const getSelectedTotals = () => {
-    const selectedCalcs = calculations.filter(calc => selectedIds.has(calc.id));
+    const selectedCalcs = filteredCalculations.filter(calc => selectedIds.has(calc.id));
     return selectedCalcs.reduce(
       (acc, calc) => ({
         totalEarnings: acc.totalEarnings + calc.total_earnings,
@@ -209,35 +233,67 @@ const HistoryPage = () => {
             </Button>
             <h1 className="text-3xl font-bold">Histórico de Cálculos</h1>
           </div>
-          <Button onClick={() => navigate('/')}>
-            <Calculator className="w-4 h-4 mr-2" />
-            Nova Calculação
-          </Button>
+          <div className="flex gap-2">
+            <div className="flex gap-1">
+              <Button
+                variant={dateFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setDateFilter('all')}
+              >
+                Todos
+              </Button>
+              <Button
+                variant={dateFilter === '7' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setDateFilter('7')}
+              >
+                7 dias
+              </Button>
+              <Button
+                variant={dateFilter === '15' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setDateFilter('15')}
+              >
+                15 dias
+              </Button>
+              <Button
+                variant={dateFilter === '30' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setDateFilter('30')}
+              >
+                30 dias
+              </Button>
+            </div>
+            <Button onClick={() => navigate('/')}>
+              <Calculator className="w-4 h-4 mr-2" />
+              Nova Calculação
+            </Button>
+          </div>
         </div>
 
-        {selectedIds.size > 0 && (
-          <Card className="mb-6 border-primary">
+        {(
+          <Card className="mb-6 border-2 border-dashed border-muted">
             <CardHeader>
-              <CardTitle>Resumo dos Dias Selecionados ({selectedTotals.days} dias)</CardTitle>
+              <CardTitle>Resumo dos Dias {selectedIds.size > 0 ? `Selecionados (${getSelectedTotals().days} dias)` : `Filtrados (${filteredCalculations.length} dias)`}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">Total Faturado</p>
                   <p className="text-2xl font-bold text-success">
-                    {formatCurrency(selectedTotals.totalEarnings)}
+                    {formatCurrency(selectedIds.size > 0 ? getSelectedTotals().totalEarnings : filteredCalculations.reduce((sum, calc) => sum + calc.total_earnings, 0))}
                   </p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">Total Combustível</p>
                   <p className="text-2xl font-bold text-warning">
-                    {formatCurrency(selectedTotals.fuelCost)}
+                    {formatCurrency(selectedIds.size > 0 ? getSelectedTotals().fuelCost : filteredCalculations.reduce((sum, calc) => sum + calc.fuel_cost, 0))}
                   </p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">Lucro Líquido Total</p>
                   <p className="text-2xl font-bold text-primary">
-                    {formatCurrency(selectedTotals.netProfit)}
+                    {formatCurrency(selectedIds.size > 0 ? getSelectedTotals().netProfit : filteredCalculations.reduce((sum, calc) => sum + calc.net_profit, 0))}
                   </p>
                 </div>
               </div>
@@ -245,23 +301,27 @@ const HistoryPage = () => {
           </Card>
         )}
 
+
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Histórico Completo</CardTitle>
               <div className="flex items-center gap-2">
                 <Checkbox
-                  checked={calculations.length > 0 && selectedIds.size === calculations.length}
+                  checked={filteredCalculations.length > 0 && selectedIds.size === filteredCalculations.length}
                   onCheckedChange={selectAll}
                 />
-                <Label>Selecionar todos</Label>
+                <Label>Selecionar todos ({filteredCalculations.length})</Label>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {calculations.length === 0 ? (
+            {filteredCalculations.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                Nenhum cálculo encontrado. Faça sua primeira calculação!
+                {calculations.length === 0 
+                  ? "Nenhum cálculo encontrado. Faça sua primeira calculação!"
+                  : "Nenhum cálculo encontrado para o período selecionado."
+                }
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -278,7 +338,7 @@ const HistoryPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {calculations.map((calculation) => (
+                    {filteredCalculations.map((calculation) => (
                       <TableRow key={calculation.id}>
                         <TableCell>
                           <Checkbox

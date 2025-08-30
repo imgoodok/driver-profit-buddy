@@ -21,7 +21,11 @@ const UberCalculator = () => {
     fuelLiters: number;
     fuelCost: number;
     netProfit: number;
-  } | null>(null);
+  }>({
+    fuelLiters: 0,
+    fuelCost: 0,
+    netProfit: 0
+  });
   const [saving, setSaving] = useState(false);
   const [usageCount, setUsageCount] = useState(0);
   const [showPricingModal, setShowPricingModal] = useState(false);
@@ -102,7 +106,7 @@ const UberCalculator = () => {
           .from('calculations')
           .insert({
             user_id: user.id,
-            date: new Date().toISOString().split('T')[0], // Today's date
+            date: new Date().toLocaleDateString('en-CA'), // Today's date in YYYY-MM-DD format
             total_earnings: earnings,
             km_driven: km,
             km_per_liter: efficiency,
@@ -283,7 +287,7 @@ const UberCalculator = () => {
             </CardContent>
           </Card>
 
-          {results && (
+          {(
             <Card className="shadow-[var(--shadow-elevated)]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

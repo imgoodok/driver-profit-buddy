@@ -58,27 +58,33 @@ serve(async (req) => {
       logStep("Creating new customer");
     }
 
-    // Set price based on plan
-    const priceData = plan === 'monthly' 
-      ? { unit_amount: 890, recurring: { interval: "month" } } // R$ 8,90
-      : { unit_amount: 7490, recurring: { interval: "year" } }; // R$ 74,90
+    // Set product ID based on plan
+    const productId = plan === 'monthly' 
+      ? 'prod_SxKxrPGl6atN6q'  // Monthly plan
+      : 'prod_SxKyDlvlayZtXc';  // Annual plan
 
-    logStep("Creating checkout session", { plan, priceData });
+    logStep("Creating checkout session", { plan, productId });
+
+    // First, get the default price for the product
+    const prices = await stripe.prices.list({
+      product: productId,
+      active: true,
+      limit: 1
+    });
+
+    if (prices.data.length === 0) {
+      throw new Error(`No active price found for product ${productId}`);
+    }
+
+    const priceId = prices.data[0].id;
+    logStep("Found price for product", { productId, priceId });
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
       line_items: [
         {
-          price_data: {
-            currency: "brl",
-            product_data: { 
-              name: plan === 'monthly' ? "Calculadora Uber - Plano Mensal" : "Calculadora Uber - Plano Anual",
-              description: "Acesso completo à calculadora com histórico e relatórios"
-            },
-            unit_amount: priceData.unit_amount,
-            recurring: priceData.recurring,
-          },
+          price: priceId,
           quantity: 1,
         },
       ],
