@@ -199,6 +199,9 @@ const HistoryPage = () => {
   };
 
   const getSelectedTotals = () => {
+    if (selectedIds.size === 0) {
+      return { totalEarnings: 0, fuelCost: 0, netProfit: 0, days: 0 };
+    }
     const selectedCalcs = filteredCalculations.filter(calc => selectedIds.has(calc.id));
     return selectedCalcs.reduce(
       (acc, calc) => ({
@@ -279,26 +282,26 @@ const HistoryPage = () => {
         {(
           <Card className="mb-6 border-2 border-dashed border-muted">
             <CardHeader>
-              <CardTitle>Resumo {selectedIds.size > 0 ? `dos selecionados (${getSelectedTotals().days} cálculos)` : `dos filtrados (${filteredCalculations.length} cálculos)`}</CardTitle>
+              <CardTitle>Resumo {selectedIds.size > 0 ? `dos selecionados (${selectedTotals.days} cálculos)` : `(nenhum selecionado)`}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">Total Faturado</p>
                   <p className="text-2xl font-bold text-success">
-                    {formatCurrency(selectedIds.size > 0 ? getSelectedTotals().totalEarnings : filteredCalculations.reduce((sum, calc) => sum + calc.total_earnings, 0))}
+                    {formatCurrency(selectedIds.size > 0 ? selectedTotals.totalEarnings : 0)}
                   </p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">Total Combustível</p>
                   <p className="text-2xl font-bold text-warning">
-                    {formatCurrency(selectedIds.size > 0 ? getSelectedTotals().fuelCost : filteredCalculations.reduce((sum, calc) => sum + calc.fuel_cost, 0))}
+                    {formatCurrency(selectedIds.size > 0 ? selectedTotals.fuelCost : 0)}
                   </p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">Lucro Líquido Total</p>
                   <p className="text-2xl font-bold text-primary">
-                    {formatCurrency(selectedIds.size > 0 ? getSelectedTotals().netProfit : filteredCalculations.reduce((sum, calc) => sum + calc.net_profit, 0))}
+                    {formatCurrency(selectedIds.size > 0 ? selectedTotals.netProfit : 0)}
                   </p>
                 </div>
               </div>
@@ -384,7 +387,7 @@ const HistoryPage = () => {
                                 className="flex-1"
                                 onClick={() => openEditDialog(calculation)}
                               >
-                                <Edit className="w-4 h-4 mr-1" /> Editar
+                                <Edit className="w-4 h-4" />
                               </Button>
                             </DialogTrigger>
                             <DialogContent>
@@ -460,12 +463,12 @@ const HistoryPage = () => {
                             </DialogContent>
                           </Dialog>
                           <Button
-                            variant="outline"
+                            variant="destructive"
                             size="sm"
+                            className="flex-1"
                             onClick={() => deleteCalculation(calculation.id)}
-                            className="text-destructive hover:text-destructive"
                           >
-                            <Trash2 className="w-4 h-4 mr-1" /> Excluir
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </CardContent>

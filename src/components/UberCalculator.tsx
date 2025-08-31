@@ -10,6 +10,7 @@ import { Calculator, Car, DollarSign, Fuel, History, LogOut, User as UserIcon, C
 import { User, Session } from "@supabase/supabase-js";
 import PricingModal from "./PricingModal";
 import { useSubscription } from "@/hooks/use-subscription";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const UberCalculator = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -18,6 +19,8 @@ const UberCalculator = () => {
   const [kmDriven, setKmDriven] = useState<string>("");
   const [kmPerLiter, setKmPerLiter] = useState<string>("");
   const [fuelPrice, setFuelPrice] = useState<string>("");
+  const [saveKmPerLiter, setSaveKmPerLiter] = useState<boolean>(false);
+  const [saveFuelPrice, setSaveFuelPrice] = useState<boolean>(false);
   const [results, setResults] = useState<{
     fuelLiters: number;
     fuelCost: number;
@@ -55,6 +58,20 @@ const UberCalculator = () => {
     const savedUsageCount = localStorage.getItem('uber-calculator-usage');
     if (savedUsageCount) {
       setUsageCount(parseInt(savedUsageCount, 10));
+    }
+
+    // Load saved preferences
+    const savedKmPerLiter = localStorage.getItem('saved-km-per-liter');
+    const savedFuelPrice = localStorage.getItem('saved-fuel-price');
+    
+    if (savedKmPerLiter) {
+      setKmPerLiter(savedKmPerLiter);
+      setSaveKmPerLiter(true);
+    }
+    
+    if (savedFuelPrice) {
+      setFuelPrice(savedFuelPrice);
+      setSaveFuelPrice(true);
     }
 
     return () => subscription.unsubscribe();
@@ -178,6 +195,38 @@ const UberCalculator = () => {
     }).format(value);
   };
 
+  const handleKmPerLiterSave = (checked: boolean) => {
+    setSaveKmPerLiter(checked);
+    if (checked && kmPerLiter) {
+      localStorage.setItem('saved-km-per-liter', kmPerLiter);
+    } else {
+      localStorage.removeItem('saved-km-per-liter');
+    }
+  };
+
+  const handleFuelPriceSave = (checked: boolean) => {
+    setSaveFuelPrice(checked);
+    if (checked && fuelPrice) {
+      localStorage.setItem('saved-fuel-price', fuelPrice);
+    } else {
+      localStorage.removeItem('saved-fuel-price');
+    }
+  };
+
+  const handleKmPerLiterChange = (value: string) => {
+    setKmPerLiter(value);
+    if (saveKmPerLiter && value) {
+      localStorage.setItem('saved-km-per-liter', value);
+    }
+  };
+
+  const handleFuelPriceChange = (value: string) => {
+    setFuelPrice(value);
+    if (saveFuelPrice && value) {
+      localStorage.setItem('saved-fuel-price', value);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
@@ -272,34 +321,58 @@ const UberCalculator = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="kmPerLiter" className="flex items-center gap-2">
-                    <Fuel className="w-4 h-4" />
-                    KM por Litro do Carro
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="kmPerLiter" className="flex items-center gap-2">
+                      <Fuel className="w-4 h-4" />
+                      KM por Litro do Carro
+                    </Label>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="save-km-per-liter"
+                        checked={saveKmPerLiter}
+                        onCheckedChange={handleKmPerLiterSave}
+                      />
+                      <Label htmlFor="save-km-per-liter" className="text-sm text-muted-foreground">
+                        Salvar
+                      </Label>
+                    </div>
+                  </div>
                   <Input
                     id="kmPerLiter"
                     type="number"
                     step="0.1"
                     placeholder="Ex: 12.5"
                     value={kmPerLiter}
-                    onChange={(e) => setKmPerLiter(e.target.value)}
+                    onChange={(e) => handleKmPerLiterChange(e.target.value)}
                     required
                     className="text-lg"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="fuelPrice" className="flex items-center gap-2">
-                    <Fuel className="w-4 h-4" />
-                    Preço do Combustível (R$/L)
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="fuelPrice" className="flex items-center gap-2">
+                      <Fuel className="w-4 h-4" />
+                      Preço do Combustível (R$/L)
+                    </Label>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="save-fuel-price"
+                        checked={saveFuelPrice}
+                        onCheckedChange={handleFuelPriceSave}
+                      />
+                      <Label htmlFor="save-fuel-price" className="text-sm text-muted-foreground">
+                        Salvar
+                      </Label>
+                    </div>
+                  </div>
                   <Input
                     id="fuelPrice"
                     type="number"
                     step="0.01"
                     placeholder="Ex: 5.50"
                     value={fuelPrice}
-                    onChange={(e) => setFuelPrice(e.target.value)}
+                    onChange={(e) => handleFuelPriceChange(e.target.value)}
                     required
                     className="text-lg"
                   />
