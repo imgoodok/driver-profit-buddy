@@ -120,7 +120,7 @@ const UberCalculator = () => {
           .from('calculations')
           .insert({
             user_id: user.id,
-            date: new Date().toLocaleDateString('en-CA'), // Today's date in YYYY-MM-DD format
+            date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`, // Data local em AAAA-MM-DD
             total_earnings: earnings,
             km_driven: km,
             km_per_liter: efficiency,

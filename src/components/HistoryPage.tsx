@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -33,7 +33,7 @@ const HistoryPage = () => {
   const [filteredCalculations, setFilteredCalculations] = useState<Calculation[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState<'all' | '7' | '15' | '30'>('all');
+  const [countFilter, setCountFilter] = useState<'all' | '7' | '15' | '30' | '50'>('all');
   const [editingCalc, setEditingCalc] = useState<Calculation | null>(null);
   const [editFormData, setEditFormData] = useState({
     total_earnings: "",
@@ -71,15 +71,15 @@ const HistoryPage = () => {
   }, [user]);
 
   useEffect(() => {
-    applyDateFilter();
-  }, [calculations, dateFilter]);
+    applyCountFilter();
+  }, [calculations, countFilter]);
 
   const fetchCalculations = async () => {
     try {
       const { data, error } = await supabase
         .from('calculations')
         .select('*')
-        .order('date', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       setCalculations(data || []);
@@ -94,22 +94,15 @@ const HistoryPage = () => {
     }
   };
 
-  const applyDateFilter = () => {
-    if (dateFilter === 'all') {
+  const applyCountFilter = () => {
+    if (countFilter === 'all') {
       setFilteredCalculations(calculations);
       return;
     }
 
-    const days = parseInt(dateFilter);
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-    
-    const filtered = calculations.filter(calc => {
-      const calcDate = new Date(calc.date + 'T00:00:00');
-      return calcDate >= cutoffDate;
-    });
-    
-    setFilteredCalculations(filtered);
+    const count = parseInt(countFilter);
+    const limited = calculations.slice(0, count);
+    setFilteredCalculations(limited);
   };
 
   const deleteCalculation = async (id: string) => {
@@ -236,7 +229,10 @@ const HistoryPage = () => {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('pt-BR');
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d) return dateStr;
+    const localDate = new Date(y, m - 1, d);
+    return localDate.toLocaleDateString('pt-BR');
   };
 
   if (loading) {
@@ -283,7 +279,7 @@ const HistoryPage = () => {
         {(
           <Card className="mb-6 border-2 border-dashed border-muted">
             <CardHeader>
-              <CardTitle>Resumo dos Dias {selectedIds.size > 0 ? `Selecionados (${getSelectedTotals().days} dias)` : `Filtrados (${filteredCalculations.length} dias)`}</CardTitle>
+              <CardTitle>Resumo {selectedIds.size > 0 ? `dos selecionados (${getSelectedTotals().days} cálculos)` : `dos filtrados (${filteredCalculations.length} cálculos)`}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -316,17 +312,6 @@ const HistoryPage = () => {
             <div className="flex items-center justify-between">
               <CardTitle>Histórico Completo</CardTitle>
               <div className="flex items-center gap-4">
-                <Select value={dateFilter} onValueChange={(value: 'all' | '7' | '15' | '30') => setDateFilter(value)}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="7">7 dias</SelectItem>
-                    <SelectItem value="15">15 dias</SelectItem>
-                    <SelectItem value="30">30 dias</SelectItem>
-                  </SelectContent>
-                </Select>
                 <div className="flex items-center gap-2">
                   <Checkbox
                     checked={filteredCalculations.length > 0 && selectedIds.size === filteredCalculations.length}
@@ -334,6 +319,18 @@ const HistoryPage = () => {
                   />
                   <Label>Selecionar todos ({filteredCalculations.length})</Label>
                 </div>
+                <Select value={countFilter} onValueChange={(value: 'all' | '7' | '15' | '30' | '50') => setCountFilter(value)}>
+                  <SelectTrigger className="w-28">
+                    <SelectValue placeholder="Últimos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="7">7</SelectItem>
+                    <SelectItem value="15">15</SelectItem>
+                    <SelectItem value="30">30</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardHeader>
@@ -346,135 +343,135 @@ const HistoryPage = () => {
                 }
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">Selecionar</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Faturamento</TableHead>
-                      <TableHead>KM Rodados</TableHead>
-                      <TableHead>Combustível</TableHead>
-                      <TableHead>Lucro Líquido</TableHead>
-                      <TableHead className="w-24">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredCalculations.map((calculation) => (
-                      <TableRow key={calculation.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedIds.has(calculation.id)}
-                            onCheckedChange={() => toggleSelection(calculation.id)}
-                          />
-                        </TableCell>
-                        <TableCell>{formatDate(calculation.date)}</TableCell>
-                        <TableCell>{formatCurrency(calculation.total_earnings)}</TableCell>
-                        <TableCell>{calculation.km_driven} km</TableCell>
-                        <TableCell>{formatCurrency(calculation.fuel_cost)}</TableCell>
-                        <TableCell>
-                          <span className={calculation.net_profit >= 0 ? "text-success" : "text-destructive"}>
+              <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-4">
+                  {filteredCalculations.map((calculation) => (
+                    <Card key={calculation.id} className="relative">
+                      <div className="absolute top-2 left-2">
+                        <Checkbox
+                          checked={selectedIds.has(calculation.id)}
+                          onCheckedChange={() => toggleSelection(calculation.id)}
+                        />
+                      </div>
+                      <CardHeader className="pt-6 pb-2">
+                        <CardTitle className="text-base">{formatDate(calculation.date)}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Faturamento</span>
+                          <span className="font-medium">{formatCurrency(calculation.total_earnings)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">KM</span>
+                          <span className="font-medium">{calculation.km_driven} km</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Combustível</span>
+                          <span className="font-medium">{formatCurrency(calculation.fuel_cost)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Lucro</span>
+                          <span className={calculation.net_profit >= 0 ? "text-success font-semibold" : "text-destructive font-semibold"}>
                             {formatCurrency(calculation.net_profit)}
                           </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => openEditDialog(calculation)}
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Editar Cálculo</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
-                                    <Label htmlFor="edit-earnings">Faturamento do Dia (R$)</Label>
-                                    <Input
-                                      id="edit-earnings"
-                                      type="number"
-                                      step="0.01"
-                                      value={editFormData.total_earnings}
-                                      onChange={(e) => setEditFormData(prev => ({
-                                        ...prev,
-                                        total_earnings: e.target.value
-                                      }))}
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label htmlFor="edit-km">KM Rodados no Dia</Label>
-                                    <Input
-                                      id="edit-km"
-                                      type="number"
-                                      step="0.1"
-                                      value={editFormData.km_driven}
-                                      onChange={(e) => setEditFormData(prev => ({
-                                        ...prev,
-                                        km_driven: e.target.value
-                                      }))}
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label htmlFor="edit-efficiency">KM por Litro do Carro</Label>
-                                    <Input
-                                      id="edit-efficiency"
-                                      type="number"
-                                      step="0.1"
-                                      value={editFormData.km_per_liter}
-                                      onChange={(e) => setEditFormData(prev => ({
-                                        ...prev,
-                                        km_per_liter: e.target.value
-                                      }))}
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label htmlFor="edit-fuel-price">Preço do Combustível (R$)</Label>
-                                    <Input
-                                      id="edit-fuel-price"
-                                      type="number"
-                                      step="0.01"
-                                      value={editFormData.fuel_price}
-                                      onChange={(e) => setEditFormData(prev => ({
-                                        ...prev,
-                                        fuel_price: e.target.value
-                                      }))}
-                                    />
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <Button onClick={updateCalculation} className="flex-1">
-                                      Salvar Alterações
-                                    </Button>
-                                    <Button 
-                                      variant="outline" 
-                                      onClick={() => setEditingCalc(null)}
-                                      className="flex-1"
-                                    >
-                                      Cancelar
-                                    </Button>
-                                  </div>
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => openEditDialog(calculation)}
+                              >
+                                <Edit className="w-4 h-4 mr-1" /> Editar
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Editar Cálculo</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div>
+                                  <Label htmlFor="edit-earnings">Faturamento do Dia (R$)</Label>
+                                  <Input
+                                    id="edit-earnings"
+                                    type="number"
+                                    step="0.01"
+                                    value={editFormData.total_earnings}
+                                    onChange={(e) => setEditFormData(prev => ({
+                                      ...prev,
+                                      total_earnings: e.target.value
+                                    }))}
+                                  />
                                 </div>
-                              </DialogContent>
-                            </Dialog>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteCalculation(calculation.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                                <div>
+                                  <Label htmlFor="edit-km">KM Rodados no Dia</Label>
+                                  <Input
+                                    id="edit-km"
+                                    type="number"
+                                    step="0.1"
+                                    value={editFormData.km_driven}
+                                    onChange={(e) => setEditFormData(prev => ({
+                                      ...prev,
+                                      km_driven: e.target.value
+                                    }))}
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="edit-efficiency">KM por Litro do Carro</Label>
+                                  <Input
+                                    id="edit-efficiency"
+                                    type="number"
+                                    step="0.1"
+                                    value={editFormData.km_per_liter}
+                                    onChange={(e) => setEditFormData(prev => ({
+                                      ...prev,
+                                      km_per_liter: e.target.value
+                                    }))}
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor="edit-fuel-price">Preço do Combustível (R$)</Label>
+                                  <Input
+                                    id="edit-fuel-price"
+                                    type="number"
+                                    step="0.01"
+                                    value={editFormData.fuel_price}
+                                    onChange={(e) => setEditFormData(prev => ({
+                                      ...prev,
+                                      fuel_price: e.target.value
+                                    }))}
+                                  />
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button onClick={updateCalculation} className="flex-1">
+                                    Salvar Alterações
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    onClick={() => setEditingCalc(null)}
+                                    className="flex-1"
+                                  >
+                                    Cancelar
+                                  </Button>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => deleteCalculation(calculation.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" /> Excluir
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>
