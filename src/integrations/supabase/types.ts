@@ -18,13 +18,17 @@ export type Database = {
         Row: {
           created_at: string
           date: string
+          food_cost: number | null
           fuel_cost: number
           fuel_liters: number
           fuel_price: number
           id: string
           km_driven: number
           km_per_liter: number
+          maintenance_cost: number | null
           net_profit: number
+          parking_cost: number | null
+          toll_cost: number | null
           total_earnings: number
           updated_at: string
           user_id: string
@@ -32,13 +36,17 @@ export type Database = {
         Insert: {
           created_at?: string
           date?: string
+          food_cost?: number | null
           fuel_cost: number
           fuel_liters: number
           fuel_price: number
           id?: string
           km_driven: number
           km_per_liter: number
+          maintenance_cost?: number | null
           net_profit: number
+          parking_cost?: number | null
+          toll_cost?: number | null
           total_earnings: number
           updated_at?: string
           user_id: string
@@ -46,13 +54,17 @@ export type Database = {
         Update: {
           created_at?: string
           date?: string
+          food_cost?: number | null
           fuel_cost?: number
           fuel_liters?: number
           fuel_price?: number
           id?: string
           km_driven?: number
           km_per_liter?: number
+          maintenance_cost?: number | null
           net_profit?: number
+          parking_cost?: number | null
+          toll_cost?: number | null
           total_earnings?: number
           updated_at?: string
           user_id?: string
@@ -64,6 +76,8 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          saved_fuel_price: number | null
+          saved_km_per_liter: number | null
           updated_at: string
           user_id: string
         }
@@ -71,6 +85,8 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          saved_fuel_price?: number | null
+          saved_km_per_liter?: number | null
           updated_at?: string
           user_id: string
         }
@@ -78,6 +94,8 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          saved_fuel_price?: number | null
+          saved_km_per_liter?: number | null
           updated_at?: string
           user_id?: string
         }

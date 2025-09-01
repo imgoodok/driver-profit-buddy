@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Edit, Calculator, ArrowLeft, Crown } from "lucide-react";
+import { Trash2, Edit, Calculator, ArrowLeft, Crown, Moon, Sun } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { User, Session } from "@supabase/supabase-js";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSubscription } from "@/hooks/use-subscription";
+import { useTheme } from "@/hooks/use-theme";
 
 interface Calculation {
   id: string;
@@ -24,6 +25,10 @@ interface Calculation {
   fuel_liters: number;
   fuel_cost: number;
   net_profit: number;
+  maintenance_cost?: number;
+  food_cost?: number;
+  toll_cost?: number;
+  parking_cost?: number;
 }
 
 const HistoryPage = () => {
@@ -45,6 +50,7 @@ const HistoryPage = () => {
   const navigate = useNavigate();
 
   const { subscribed, subscription_tier } = useSubscription(user);
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     // Set up auth state listener
@@ -253,6 +259,13 @@ const HistoryPage = () => {
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" onClick={toggleTheme}>
+              {theme === "light" ? (
+                <Moon className="w-4 h-4" />
+              ) : (
+                <Sun className="w-4 h-4" />
+              )}
+            </Button>
             <Button variant="ghost" onClick={() => navigate('/')}>
               <ArrowLeft className="w-4 h-4 mr-2" />
               Voltar
@@ -347,7 +360,7 @@ const HistoryPage = () => {
               </div>
             ) : (
               <div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
                   {filteredCalculations.map((calculation) => (
                     <Card key={calculation.id} className="relative">
                       <div className="absolute top-2 left-2">
@@ -378,6 +391,33 @@ const HistoryPage = () => {
                             {formatCurrency(calculation.net_profit)}
                           </span>
                         </div>
+                        
+                        {/* Additional expenses */}
+                        {(calculation.maintenance_cost && calculation.maintenance_cost > 0) && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Manutenção</span>
+                            <span className="text-warning">{formatCurrency(calculation.maintenance_cost)}</span>
+                          </div>
+                        )}
+                        {(calculation.food_cost && calculation.food_cost > 0) && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Alimentação</span>
+                            <span className="text-warning">{formatCurrency(calculation.food_cost)}</span>
+                          </div>
+                        )}
+                        {(calculation.toll_cost && calculation.toll_cost > 0) && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Pedágio</span>
+                            <span className="text-warning">{formatCurrency(calculation.toll_cost)}</span>
+                          </div>
+                        )}
+                        {(calculation.parking_cost && calculation.parking_cost > 0) && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Estacionamento</span>
+                            <span className="text-warning">{formatCurrency(calculation.parking_cost)}</span>
+                          </div>
+                        )}
+                        
                         <div className="flex gap-2 pt-2">
                           <Dialog>
                             <DialogTrigger asChild>

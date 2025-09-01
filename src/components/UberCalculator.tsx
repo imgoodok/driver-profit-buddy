@@ -6,11 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Calculator, Car, DollarSign, Fuel, History, LogOut, User as UserIcon, Crown } from "lucide-react";
+import { Calculator, Car, DollarSign, Fuel, History, LogOut, User as UserIcon, Crown, Moon, Sun, Plus } from "lucide-react";
 import { User, Session } from "@supabase/supabase-js";
 import PricingModal from "./PricingModal";
 import { useSubscription } from "@/hooks/use-subscription";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTheme } from "@/hooks/use-theme";
 
 const UberCalculator = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -34,10 +35,19 @@ const UberCalculator = () => {
   const [usageCount, setUsageCount] = useState(0);
   const [showPricingModal, setShowPricingModal] = useState(false);
   
+  // Gastos adicionais state
+  const [additionalExpenses, setAdditionalExpenses] = useState({
+    maintenance: "",
+    food: "",
+    toll: "",
+    parking: ""
+  });
+  
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const { subscribed, subscription_tier, loading: subLoading } = useSubscription(user);
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     // Set up auth state listener
@@ -60,22 +70,47 @@ const UberCalculator = () => {
       setUsageCount(parseInt(savedUsageCount, 10));
     }
 
-    // Load saved preferences
-    const savedKmPerLiter = localStorage.getItem('saved-km-per-liter');
-    const savedFuelPrice = localStorage.getItem('saved-fuel-price');
-    
-    if (savedKmPerLiter) {
-      setKmPerLiter(savedKmPerLiter);
-      setSaveKmPerLiter(true);
-    }
-    
-    if (savedFuelPrice) {
-      setFuelPrice(savedFuelPrice);
-      setSaveFuelPrice(true);
-    }
-
     return () => subscription.unsubscribe();
   }, []);
+
+  // Load user preferences when user changes
+  useEffect(() => {
+    if (user) {
+      loadUserPreferences();
+    } else {
+      // Clear preferences when no user
+      setKmPerLiter("");
+      setFuelPrice("");
+      setSaveKmPerLiter(false);
+      setSaveFuelPrice(false);
+    }
+  }, [user]);
+
+  const loadUserPreferences = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('saved_km_per_liter, saved_fuel_price')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) throw error;
+
+      if (data?.saved_km_per_liter) {
+        setKmPerLiter(data.saved_km_per_liter.toString());
+        setSaveKmPerLiter(true);
+      }
+
+      if (data?.saved_fuel_price) {
+        setFuelPrice(data.saved_fuel_price.toString());
+        setSaveFuelPrice(true);
+      }
+    } catch (error) {
+      console.log('Error loading preferences:', error);
+    }
+  };
 
   const calculateProfit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,36 +166,63 @@ const UberCalculator = () => {
 
     // Save to database only if user is logged in
     if (user) {
-      setSaving(true);
-      try {
-        const { error } = await supabase
-          .from('calculations')
-          .insert({
-            user_id: user.id,
-            date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`, // Data local em AAAA-MM-DD
-            total_earnings: earnings,
-            km_driven: km,
-            km_per_liter: efficiency,
-            fuel_price: price,
-            fuel_liters: calculationResults.fuelLiters,
-            fuel_cost: calculationResults.fuelCost,
-            net_profit: calculationResults.netProfit,
+      // Check if at least one additional expense has value > 0
+      const hasAdditionalExpenses = Object.values(additionalExpenses).some(value => 
+        value !== "" && parseFloat(value) > 0
+      );
+      
+      const maintenance = additionalExpenses.maintenance ? parseFloat(additionalExpenses.maintenance) : 0;
+      const food = additionalExpenses.food ? parseFloat(additionalExpenses.food) : 0;
+      const toll = additionalExpenses.toll ? parseFloat(additionalExpenses.toll) : 0;
+      const parking = additionalExpenses.parking ? parseFloat(additionalExpenses.parking) : 0;
+      
+      // Only save if has additional expenses OR if it's a regular calculation (when no expenses are required)
+      if (hasAdditionalExpenses || (!hasAdditionalExpenses && Object.values(additionalExpenses).every(v => v === "" || parseFloat(v) === 0))) {
+        setSaving(true);
+        try {
+          const { error } = await supabase
+            .from('calculations')
+            .insert({
+              user_id: user.id,
+              date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`,
+              total_earnings: earnings,
+              km_driven: km,
+              km_per_liter: efficiency,
+              fuel_price: price,
+              fuel_liters: calculationResults.fuelLiters,
+              fuel_cost: calculationResults.fuelCost,
+              net_profit: calculationResults.netProfit,
+              maintenance_cost: maintenance,
+              food_cost: food,
+              toll_cost: toll,
+              parking_cost: parking,
+            });
+
+          if (error) throw error;
+
+          // Clear additional expenses after saving only if they had values
+          if (hasAdditionalExpenses) {
+            setAdditionalExpenses({
+              maintenance: "",
+              food: "",
+              toll: "",
+              parking: ""
+            });
+          }
+
+          toast({
+            title: "Cálculo salvo!",
+            description: "Seu cálculo foi salvo no histórico com sucesso",
           });
-
-        if (error) throw error;
-
-        toast({
-          title: "Cálculo salvo!",
-          description: "Seu cálculo foi salvo no histórico com sucesso",
-        });
-      } catch (error: any) {
-        toast({
-          title: "Erro ao salvar",
-          description: "Não foi possível salvar o cálculo no histórico",
-          variant: "destructive",
-        });
-      } finally {
-        setSaving(false);
+        } catch (error: any) {
+          toast({
+            title: "Erro ao salvar",
+            description: "Não foi possível salvar o cálculo no histórico",
+            variant: "destructive",
+          });
+        } finally {
+          setSaving(false);
+        }
       }
     } else {
       toast({
@@ -195,35 +257,71 @@ const UberCalculator = () => {
     }).format(value);
   };
 
-  const handleKmPerLiterSave = (checked: boolean) => {
+  const handleKmPerLiterSave = async (checked: boolean) => {
     setSaveKmPerLiter(checked);
-    if (checked && kmPerLiter) {
-      localStorage.setItem('saved-km-per-liter', kmPerLiter);
-    } else {
-      localStorage.removeItem('saved-km-per-liter');
+    if (user) {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .upsert({
+            user_id: user.id,
+            saved_km_per_liter: checked && kmPerLiter ? parseFloat(kmPerLiter) : null
+          });
+        if (error) throw error;
+      } catch (error) {
+        console.log('Error saving km per liter preference:', error);
+      }
     }
   };
 
-  const handleFuelPriceSave = (checked: boolean) => {
+  const handleFuelPriceSave = async (checked: boolean) => {
     setSaveFuelPrice(checked);
-    if (checked && fuelPrice) {
-      localStorage.setItem('saved-fuel-price', fuelPrice);
-    } else {
-      localStorage.removeItem('saved-fuel-price');
+    if (user) {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .upsert({
+            user_id: user.id,
+            saved_fuel_price: checked && fuelPrice ? parseFloat(fuelPrice) : null
+          });
+        if (error) throw error;
+      } catch (error) {
+        console.log('Error saving fuel price preference:', error);
+      }
     }
   };
 
-  const handleKmPerLiterChange = (value: string) => {
+  const handleKmPerLiterChange = async (value: string) => {
     setKmPerLiter(value);
-    if (saveKmPerLiter && value) {
-      localStorage.setItem('saved-km-per-liter', value);
+    if (saveKmPerLiter && value && user) {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .upsert({
+            user_id: user.id,
+            saved_km_per_liter: parseFloat(value)
+          });
+        if (error) throw error;
+      } catch (error) {
+        console.log('Error updating km per liter:', error);
+      }
     }
   };
 
-  const handleFuelPriceChange = (value: string) => {
+  const handleFuelPriceChange = async (value: string) => {
     setFuelPrice(value);
-    if (saveFuelPrice && value) {
-      localStorage.setItem('saved-fuel-price', value);
+    if (saveFuelPrice && value && user) {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .upsert({
+            user_id: user.id,
+            saved_fuel_price: parseFloat(value)
+          });
+        if (error) throw error;
+      } catch (error) {
+        console.log('Error updating fuel price:', error);
+      }
     }
   };
 
@@ -232,6 +330,15 @@ const UberCalculator = () => {
     <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-start mb-8">
+          <div className="flex items-center">
+            <Button variant="ghost" size="sm" onClick={toggleTheme} className="mr-4">
+              {theme === "light" ? (
+                <Moon className="w-4 h-4" />
+              ) : (
+                <Sun className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
           <div className="text-center flex-1">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-4">
               Calculadora Uber
@@ -385,6 +492,89 @@ const UberCalculator = () => {
               </form>
             </CardContent>
           </Card>
+
+          {user && (
+            <Card className="shadow-[var(--shadow-card)] mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="w-5 h-5" />
+                  Gastos Adicionais
+                </CardTitle>
+                <CardDescription>
+                  Adicione gastos extras do seu dia de trabalho
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="maintenance">Manutenção (R$)</Label>
+                    <Input
+                      id="maintenance"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={additionalExpenses.maintenance}
+                      onChange={(e) => setAdditionalExpenses(prev => ({
+                        ...prev,
+                        maintenance: e.target.value
+                      }))}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="food">Alimentação (R$)</Label>
+                    <Input
+                      id="food"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={additionalExpenses.food}
+                      onChange={(e) => setAdditionalExpenses(prev => ({
+                        ...prev,
+                        food: e.target.value
+                      }))}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="toll">Pedágio (R$)</Label>
+                    <Input
+                      id="toll"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={additionalExpenses.toll}
+                      onChange={(e) => setAdditionalExpenses(prev => ({
+                        ...prev,
+                        toll: e.target.value
+                      }))}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="parking">Estacionamento (R$)</Label>
+                    <Input
+                      id="parking"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={additionalExpenses.parking}
+                      onChange={(e) => setAdditionalExpenses(prev => ({
+                        ...prev,
+                        parking: e.target.value
+                      }))}
+                    />
+                  </div>
+                </div>
+                
+                <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Nota:</strong> Os gastos adicionais são opcionais. Você pode salvar o cálculo com ou sem eles.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {(
             <Card className="shadow-[var(--shadow-elevated)]">
