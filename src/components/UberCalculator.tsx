@@ -263,10 +263,8 @@ const UberCalculator = () => {
       try {
         const { error } = await supabase
           .from('profiles')
-          .upsert({
-            user_id: user.id,
-            saved_km_per_liter: checked && kmPerLiter ? parseFloat(kmPerLiter) : null
-          });
+          .update({ saved_km_per_liter: checked && kmPerLiter ? parseFloat(kmPerLiter) : null })
+          .eq('user_id', user.id);
         if (error) throw error;
       } catch (error) {
         console.log('Error saving km per liter preference:', error);
@@ -280,10 +278,8 @@ const UberCalculator = () => {
       try {
         const { error } = await supabase
           .from('profiles')
-          .upsert({
-            user_id: user.id,
-            saved_fuel_price: checked && fuelPrice ? parseFloat(fuelPrice) : null
-          });
+          .update({ saved_fuel_price: checked && fuelPrice ? parseFloat(fuelPrice) : null })
+          .eq('user_id', user.id);
         if (error) throw error;
       } catch (error) {
         console.log('Error saving fuel price preference:', error);
@@ -297,10 +293,8 @@ const UberCalculator = () => {
       try {
         const { error } = await supabase
           .from('profiles')
-          .upsert({
-            user_id: user.id,
-            saved_km_per_liter: parseFloat(value)
-          });
+          .update({ saved_km_per_liter: parseFloat(value) })
+          .eq('user_id', user.id);
         if (error) throw error;
       } catch (error) {
         console.log('Error updating km per liter:', error);
@@ -314,10 +308,8 @@ const UberCalculator = () => {
       try {
         const { error } = await supabase
           .from('profiles')
-          .upsert({
-            user_id: user.id,
-            saved_fuel_price: parseFloat(value)
-          });
+          .update({ saved_fuel_price: parseFloat(value) })
+          .eq('user_id', user.id);
         if (error) throw error;
       } catch (error) {
         console.log('Error updating fuel price:', error);
@@ -381,6 +373,79 @@ const UberCalculator = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Relatório do Dia - Horizontal no topo */}
+          {(results.fuelLiters > 0 || results.fuelCost > 0 || results.netProfit !== 0) && (
+            <Card className="shadow-[var(--shadow-elevated)] lg:col-span-2 mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5" />
+                  Relatório do Dia
+                </CardTitle>
+                <CardDescription>
+                  Resumo dos seus ganhos e custos
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-warning/10 rounded-lg p-4 text-center border border-warning/20">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <Fuel className="w-5 h-5 text-warning" />
+                      <span className="font-medium text-sm">Combustível Consumido</span>
+                    </div>
+                    <p className="text-xl font-bold text-warning">
+                      {results.fuelLiters} L
+                    </p>
+                  </div>
+
+                  <div className="bg-destructive/10 rounded-lg p-4 text-center border border-destructive/20">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <DollarSign className="w-5 h-5 text-destructive" />
+                      <span className="font-medium text-sm">Gasto Combustível</span>
+                    </div>
+                    <p className="text-xl font-bold text-destructive">
+                      {formatCurrency(results.fuelCost)}
+                    </p>
+                  </div>
+
+                  <div className={`rounded-lg p-4 text-center border ${
+                    results.netProfit >= 0 
+                      ? 'bg-success/10 border-success/20' 
+                      : 'bg-destructive/10 border-destructive/20'
+                  }`}>
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <DollarSign className={`w-5 h-5 ${results.netProfit >= 0 ? 'text-success' : 'text-destructive'}`} />
+                      <span className="font-medium text-sm">Lucro Líquido</span>
+                    </div>
+                    <p className={`text-xl font-bold ${results.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                      {formatCurrency(results.netProfit)}
+                    </p>
+                  </div>
+
+                  <div className="bg-card border rounded-lg p-4">
+                    <h3 className="font-semibold mb-2 flex items-center gap-2 text-sm">
+                      <Car className="w-4 h-4" />
+                      Resumo
+                    </h3>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Faturamento:</span>
+                        <span className="font-medium">{formatCurrency(parseFloat(totalEarnings) || 0)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">KM:</span>
+                        <span className="font-medium">{parseFloat(kmDriven) || 0} km</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Eficiência:</span>
+                        <span className="font-medium">{parseFloat(kmPerLiter) || 0} km/l</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="shadow-[var(--shadow-card)]">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -575,95 +640,11 @@ const UberCalculator = () => {
               </CardContent>
             </Card>
           )}
-
-          {(
-            <Card className="shadow-[var(--shadow-elevated)]">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5" />
-                  Relatório do Dia
-                </CardTitle>
-                <CardDescription>
-                  Resumo dos seus ganhos e custos
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-warning/10 rounded-lg p-4 text-center border border-warning/20">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <Fuel className="w-5 h-5 text-warning" />
-                      <span className="font-medium">Combustível Consumido</span>
-                    </div>
-                    <p className="text-2xl font-bold text-warning">
-                      {results.fuelLiters} Litros
-                    </p>
-                  </div>
-
-                  <div className="bg-destructive/10 rounded-lg p-4 text-center border border-destructive/20">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <DollarSign className="w-5 h-5 text-destructive" />
-                      <span className="font-medium">Gasto com Combustível</span>
-                    </div>
-                    <p className="text-2xl font-bold text-destructive">
-                      {formatCurrency(results.fuelCost)}
-                    </p>
-                  </div>
-
-                  <div className={`rounded-lg p-4 text-center border ${
-                    results.netProfit >= 0 
-                      ? 'bg-success/10 border-success/20' 
-                      : 'bg-destructive/10 border-destructive/20'
-                  }`}>
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <DollarSign className={`w-5 h-5 ${results.netProfit >= 0 ? 'text-success' : 'text-destructive'}`} />
-                      <span className="font-medium">Lucro Líquido</span>
-                    </div>
-                    <p className={`text-3xl font-bold ${results.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
-                      {formatCurrency(results.netProfit)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-card border rounded-lg p-4">
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <Car className="w-4 h-4" />
-                    Resumo Detalhado
-                  </h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Faturamento total:</span>
-                      <span className="font-medium">{formatCurrency(parseFloat(totalEarnings) || 0)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Quilometragem:</span>
-                      <span className="font-medium">{parseFloat(kmDriven) || 0} km</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Eficiência do veículo:</span>
-                      <span className="font-medium">{parseFloat(kmPerLiter) || 0} km/l</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Preço do combustível:</span>
-                      <span className="font-medium">{formatCurrency(parseFloat(fuelPrice) || 0)}/l</span>
-                    </div>
-                    <div className="border-t pt-2 mt-3">
-                      <div className="flex justify-between text-base font-semibold">
-                        <span>Resultado final:</span>
-                        <span className={results.netProfit >= 0 ? 'text-success' : 'text-destructive'}>
-                          {formatCurrency(results.netProfit)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
 
-        <PricingModal
-          isOpen={showPricingModal}
-          onClose={() => setShowPricingModal(false)}
+        <PricingModal 
+          isOpen={showPricingModal} 
+          onClose={() => setShowPricingModal(false)} 
           onSelectPlan={() => navigate('/auth')}
         />
       </div>
