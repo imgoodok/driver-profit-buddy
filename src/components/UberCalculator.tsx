@@ -32,6 +32,7 @@ const UberCalculator = () => {
     netProfit: 0
   });
   const [saving, setSaving] = useState(false);
+  const [savingExpenses, setSavingExpenses] = useState(false);
   const [usageCount, setUsageCount] = useState(0);
   const [showPricingModal, setShowPricingModal] = useState(false);
   
@@ -166,63 +167,40 @@ const UberCalculator = () => {
 
     // Save to database only if user is logged in
     if (user) {
-      // Check if at least one additional expense has value > 0
-      const hasAdditionalExpenses = Object.values(additionalExpenses).some(value => 
-        value !== "" && parseFloat(value) > 0
-      );
-      
-      const maintenance = additionalExpenses.maintenance ? parseFloat(additionalExpenses.maintenance) : 0;
-      const food = additionalExpenses.food ? parseFloat(additionalExpenses.food) : 0;
-      const toll = additionalExpenses.toll ? parseFloat(additionalExpenses.toll) : 0;
-      const parking = additionalExpenses.parking ? parseFloat(additionalExpenses.parking) : 0;
-      
-      // Only save if has additional expenses OR if it's a regular calculation (when no expenses are required)
-      if (hasAdditionalExpenses || (!hasAdditionalExpenses && Object.values(additionalExpenses).every(v => v === "" || parseFloat(v) === 0))) {
-        setSaving(true);
-        try {
-          const { error } = await supabase
-            .from('calculations')
-            .insert({
-              user_id: user.id,
-              date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`,
-              total_earnings: earnings,
-              km_driven: km,
-              km_per_liter: efficiency,
-              fuel_price: price,
-              fuel_liters: calculationResults.fuelLiters,
-              fuel_cost: calculationResults.fuelCost,
-              net_profit: calculationResults.netProfit,
-              maintenance_cost: maintenance,
-              food_cost: food,
-              toll_cost: toll,
-              parking_cost: parking,
-            });
-
-          if (error) throw error;
-
-          // Clear additional expenses after saving only if they had values
-          if (hasAdditionalExpenses) {
-            setAdditionalExpenses({
-              maintenance: "",
-              food: "",
-              toll: "",
-              parking: ""
-            });
-          }
-
-          toast({
-            title: "Cálculo salvo!",
-            description: "Seu cálculo foi salvo no histórico com sucesso",
+      setSaving(true);
+      try {
+        const { error } = await supabase
+          .from('calculations')
+          .insert({
+            user_id: user.id,
+            date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`,
+            total_earnings: earnings,
+            km_driven: km,
+            km_per_liter: efficiency,
+            fuel_price: price,
+            fuel_liters: calculationResults.fuelLiters,
+            fuel_cost: calculationResults.fuelCost,
+            net_profit: calculationResults.netProfit,
+            maintenance_cost: 0,
+            food_cost: 0,
+            toll_cost: 0,
+            parking_cost: 0,
           });
-        } catch (error: any) {
-          toast({
-            title: "Erro ao salvar",
-            description: "Não foi possível salvar o cálculo no histórico",
-            variant: "destructive",
-          });
-        } finally {
-          setSaving(false);
-        }
+
+        if (error) throw error;
+
+        toast({
+          title: "Cálculo salvo!",
+          description: "Seu cálculo foi salvo no histórico com sucesso",
+        });
+      } catch (error: any) {
+        toast({
+          title: "Erro ao salvar",
+          description: "Não foi possível salvar o cálculo no histórico",
+          variant: "destructive",
+        });
+      } finally {
+        setSaving(false);
       }
     } else {
       toast({
@@ -317,6 +295,68 @@ const UberCalculator = () => {
     }
   };
 
+  const saveAdditionalExpenses = async () => {
+    if (!user) return;
+    
+    // Check if at least one additional expense has value > 0
+    const hasAdditionalExpenses = Object.values(additionalExpenses).some(value => 
+      value !== "" && parseFloat(value) > 0
+    );
+    
+    if (!hasAdditionalExpenses) {
+      toast({
+        title: "Erro",
+        description: "Adicione pelo menos um gasto adicional para salvar",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const maintenance = additionalExpenses.maintenance ? parseFloat(additionalExpenses.maintenance) : 0;
+    const food = additionalExpenses.food ? parseFloat(additionalExpenses.food) : 0;
+    const toll = additionalExpenses.toll ? parseFloat(additionalExpenses.toll) : 0;
+    const parking = additionalExpenses.parking ? parseFloat(additionalExpenses.parking) : 0;
+    const totalCost = maintenance + food + toll + parking;
+    
+    setSavingExpenses(true);
+    try {
+      const { error } = await supabase
+        .from('additional_expenses')
+        .insert({
+          user_id: user.id,
+          date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`,
+          maintenance_cost: maintenance,
+          food_cost: food,
+          toll_cost: toll,
+          parking_cost: parking,
+          total_cost: totalCost,
+        });
+
+      if (error) throw error;
+
+      // Clear additional expenses after saving
+      setAdditionalExpenses({
+        maintenance: "",
+        food: "",
+        toll: "",
+        parking: ""
+      });
+
+      toast({
+        title: "Gastos salvos!",
+        description: "Seus gastos adicionais foram salvos no histórico",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao salvar",
+        description: "Não foi possível salvar os gastos adicionais",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingExpenses(false);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
@@ -372,79 +412,78 @@ const UberCalculator = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Relatório do Dia - Horizontal no topo */}
-          {(results.fuelLiters > 0 || results.fuelCost > 0 || results.netProfit !== 0) && (
-            <Card className="shadow-[var(--shadow-elevated)] lg:col-span-2 mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5" />
-                  Relatório do Dia
-                </CardTitle>
-                <CardDescription>
-                  Resumo dos seus ganhos e custos
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-warning/10 rounded-lg p-4 text-center border border-warning/20">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <Fuel className="w-5 h-5 text-warning" />
-                      <span className="font-medium text-sm">Combustível Consumido</span>
-                    </div>
-                    <p className="text-xl font-bold text-warning">
-                      {results.fuelLiters} L
-                    </p>
-                  </div>
+        {/* Relatório do Dia - Sempre visível horizontal no topo */}
+        <Card className="shadow-[var(--shadow-elevated)] mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5" />
+              Relatório do Dia
+            </CardTitle>
+            <CardDescription>
+              Resumo dos seus ganhos e custos
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-warning/10 rounded-lg p-4 text-center border border-warning/20">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Fuel className="w-5 h-5 text-warning" />
+                  <span className="font-medium text-sm">Combustível Consumido</span>
+                </div>
+                <p className="text-xl font-bold text-warning">
+                  {results.fuelLiters || 0} L
+                </p>
+              </div>
 
-                  <div className="bg-destructive/10 rounded-lg p-4 text-center border border-destructive/20">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <DollarSign className="w-5 h-5 text-destructive" />
-                      <span className="font-medium text-sm">Gasto Combustível</span>
-                    </div>
-                    <p className="text-xl font-bold text-destructive">
-                      {formatCurrency(results.fuelCost)}
-                    </p>
-                  </div>
+              <div className="bg-destructive/10 rounded-lg p-4 text-center border border-destructive/20">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <DollarSign className="w-5 h-5 text-destructive" />
+                  <span className="font-medium text-sm">Gasto Combustível</span>
+                </div>
+                <p className="text-xl font-bold text-destructive">
+                  {formatCurrency(results.fuelCost || 0)}
+                </p>
+              </div>
 
-                  <div className={`rounded-lg p-4 text-center border ${
-                    results.netProfit >= 0 
-                      ? 'bg-success/10 border-success/20' 
-                      : 'bg-destructive/10 border-destructive/20'
-                  }`}>
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <DollarSign className={`w-5 h-5 ${results.netProfit >= 0 ? 'text-success' : 'text-destructive'}`} />
-                      <span className="font-medium text-sm">Lucro Líquido</span>
-                    </div>
-                    <p className={`text-xl font-bold ${results.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
-                      {formatCurrency(results.netProfit)}
-                    </p>
-                  </div>
+              <div className={`rounded-lg p-4 text-center border ${
+                (results.netProfit || 0) >= 0 
+                  ? 'bg-success/10 border-success/20' 
+                  : 'bg-destructive/10 border-destructive/20'
+              }`}>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <DollarSign className={`w-5 h-5 ${(results.netProfit || 0) >= 0 ? 'text-success' : 'text-destructive'}`} />
+                  <span className="font-medium text-sm">Lucro Líquido</span>
+                </div>
+                <p className={`text-xl font-bold ${(results.netProfit || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {formatCurrency(results.netProfit || 0)}
+                </p>
+              </div>
 
-                  <div className="bg-card border rounded-lg p-4">
-                    <h3 className="font-semibold mb-2 flex items-center gap-2 text-sm">
-                      <Car className="w-4 h-4" />
-                      Resumo
-                    </h3>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Faturamento:</span>
-                        <span className="font-medium">{formatCurrency(parseFloat(totalEarnings) || 0)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">KM:</span>
-                        <span className="font-medium">{parseFloat(kmDriven) || 0} km</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Eficiência:</span>
-                        <span className="font-medium">{parseFloat(kmPerLiter) || 0} km/l</span>
-                      </div>
-                    </div>
+              <div className="bg-card border rounded-lg p-4">
+                <h3 className="font-semibold mb-2 flex items-center gap-2 text-sm">
+                  <Car className="w-4 h-4" />
+                  Resumo
+                </h3>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Faturamento:</span>
+                    <span className="font-medium">{formatCurrency(parseFloat(totalEarnings) || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">KM:</span>
+                    <span className="font-medium">{parseFloat(kmDriven) || 0} km</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Eficiência:</span>
+                    <span className="font-medium">{parseFloat(kmPerLiter) || 0} km/l</span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
           <Card className="shadow-[var(--shadow-card)]">
             <CardHeader>
@@ -632,10 +671,21 @@ const UberCalculator = () => {
                   </div>
                 </div>
                 
+                
                 <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Nota:</strong> Os gastos adicionais são opcionais. Você pode salvar o cálculo com ou sem eles.
+                  <p className="text-sm text-muted-foreground mb-3">
+                    <strong>Nota:</strong> Os gastos adicionais devem ter pelo menos um valor para serem salvos.
                   </p>
+                  <Button 
+                    onClick={saveAdditionalExpenses} 
+                    className="w-full" 
+                    size="lg" 
+                    disabled={savingExpenses}
+                    variant="outline"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    {savingExpenses ? "Salvando..." : "Salvar Gastos Adicionais"}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

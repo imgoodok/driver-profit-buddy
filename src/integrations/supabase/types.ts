@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      additional_expenses: {
+        Row: {
+          created_at: string
+          date: string
+          food_cost: number | null
+          id: string
+          maintenance_cost: number | null
+          parking_cost: number | null
+          toll_cost: number | null
+          total_cost: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          food_cost?: number | null
+          id?: string
+          maintenance_cost?: number | null
+          parking_cost?: number | null
+          toll_cost?: number | null
+          total_cost: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          food_cost?: number | null
+          id?: string
+          maintenance_cost?: number | null
+          parking_cost?: number | null
+          toll_cost?: number | null
+          total_cost?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       calculations: {
         Row: {
           created_at: string

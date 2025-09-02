@@ -31,12 +31,25 @@ interface Calculation {
   parking_cost?: number;
 }
 
+interface AdditionalExpense {
+  id: string;
+  date: string;
+  maintenance_cost: number;
+  food_cost: number;
+  toll_cost: number;
+  parking_cost: number;
+  total_cost: number;
+}
+
 const HistoryPage = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [calculations, setCalculations] = useState<Calculation[]>([]);
+  const [additionalExpenses, setAdditionalExpenses] = useState<AdditionalExpense[]>([]);
   const [filteredCalculations, setFilteredCalculations] = useState<Calculation[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filteredExpenses, setFilteredExpenses] = useState<AdditionalExpense[]>([]);
+  const [selectedCalcIds, setSelectedCalcIds] = useState<Set<string>>(new Set());
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [countFilter, setCountFilter] = useState<'all' | '7' | '15' | '30' | '50'>('all');
   const [editingCalc, setEditingCalc] = useState<Calculation | null>(null);
@@ -73,12 +86,13 @@ const HistoryPage = () => {
   useEffect(() => {
     if (user) {
       fetchCalculations();
+      fetchAdditionalExpenses();
     }
   }, [user]);
 
   useEffect(() => {
     applyCountFilter();
-  }, [calculations, countFilter]);
+  }, [calculations, additionalExpenses, countFilter]);
 
   const fetchCalculations = async () => {
     try {
@@ -100,15 +114,36 @@ const HistoryPage = () => {
     }
   };
 
+  const fetchAdditionalExpenses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('additional_expenses')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAdditionalExpenses(data || []);
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os gastos adicionais",
+        variant: "destructive",
+      });
+    }
+  };
+
   const applyCountFilter = () => {
     if (countFilter === 'all') {
       setFilteredCalculations(calculations);
+      setFilteredExpenses(additionalExpenses);
       return;
     }
 
     const count = parseInt(countFilter);
-    const limited = calculations.slice(0, count);
-    setFilteredCalculations(limited);
+    const limitedCalcs = calculations.slice(0, count);
+    const limitedExpenses = additionalExpenses.slice(0, count);
+    setFilteredCalculations(limitedCalcs);
+    setFilteredExpenses(limitedExpenses);
   };
 
   const deleteCalculation = async (id: string) => {
@@ -121,7 +156,7 @@ const HistoryPage = () => {
       if (error) throw error;
 
       setCalculations(prev => prev.filter(calc => calc.id !== id));
-      setSelectedIds(prev => {
+      setSelectedCalcIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(id);
         return newSet;
@@ -184,8 +219,8 @@ const HistoryPage = () => {
     }
   };
 
-  const toggleSelection = (id: string) => {
-    setSelectedIds(prev => {
+  const toggleCalcSelection = (id: string) => {
+    setSelectedCalcIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
         newSet.delete(id);
@@ -196,28 +231,91 @@ const HistoryPage = () => {
     });
   };
 
-  const selectAll = () => {
-    if (selectedIds.size === filteredCalculations.length) {
-      setSelectedIds(new Set());
+  const toggleExpenseSelection = (id: string) => {
+    setSelectedExpenseIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllCalculations = () => {
+    if (selectedCalcIds.size === filteredCalculations.length) {
+      setSelectedCalcIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredCalculations.map(calc => calc.id)));
+      setSelectedCalcIds(new Set(filteredCalculations.map(calc => calc.id)));
+    }
+  };
+
+  const selectAllExpenses = () => {
+    if (selectedExpenseIds.size === filteredExpenses.length) {
+      setSelectedExpenseIds(new Set());
+    } else {
+      setSelectedExpenseIds(new Set(filteredExpenses.map(exp => exp.id)));
     }
   };
 
   const getSelectedTotals = () => {
-    if (selectedIds.size === 0) {
-      return { totalEarnings: 0, fuelCost: 0, netProfit: 0, days: 0 };
-    }
-    const selectedCalcs = filteredCalculations.filter(calc => selectedIds.has(calc.id));
-    return selectedCalcs.reduce(
+    const selectedCalcs = filteredCalculations.filter(calc => selectedCalcIds.has(calc.id));
+    const selectedExpenses = filteredExpenses.filter(exp => selectedExpenseIds.has(exp.id));
+    
+    const calcTotals = selectedCalcs.reduce(
       (acc, calc) => ({
         totalEarnings: acc.totalEarnings + calc.total_earnings,
         fuelCost: acc.fuelCost + calc.fuel_cost,
         netProfit: acc.netProfit + calc.net_profit,
+        totalKm: acc.totalKm + calc.km_driven,
         days: acc.days + 1,
       }),
-      { totalEarnings: 0, fuelCost: 0, netProfit: 0, days: 0 }
+      { totalEarnings: 0, fuelCost: 0, netProfit: 0, totalKm: 0, days: 0 }
     );
+
+    const expenseTotals = selectedExpenses.reduce(
+      (acc, exp) => ({
+        totalExpenses: acc.totalExpenses + exp.total_cost,
+        expenseCount: acc.expenseCount + 1,
+      }),
+      { totalExpenses: 0, expenseCount: 0 }
+    );
+
+    return {
+      ...calcTotals,
+      ...expenseTotals,
+      finalNetProfit: calcTotals.netProfit - expenseTotals.totalExpenses
+    };
+  };
+
+  const deleteAdditionalExpense = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('additional_expenses')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setAdditionalExpenses(prev => prev.filter(exp => exp.id !== id));
+      setSelectedExpenseIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+      
+      toast({
+        title: "Sucesso",
+        description: "Gasto adicional excluído com sucesso",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o gasto adicional",
+        variant: "destructive",
+      });
+    }
   };
 
   const openEditDialog = (calculation: Calculation) => {
@@ -292,48 +390,223 @@ const HistoryPage = () => {
           </div>
         </div>
 
-        {(
-          <Card className="mb-6 border-2 border-dashed border-muted">
-            <CardHeader>
-              <CardTitle>Resumo {selectedIds.size > 0 ? `dos selecionados (${selectedTotals.days} cálculos)` : `(nenhum selecionado)`}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">Total Faturado</p>
-                  <p className="text-2xl font-bold text-success">
-                    {formatCurrency(selectedIds.size > 0 ? selectedTotals.totalEarnings : 0)}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">Total Combustível</p>
-                  <p className="text-2xl font-bold text-warning">
-                    {formatCurrency(selectedIds.size > 0 ? selectedTotals.fuelCost : 0)}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">Lucro Líquido Total</p>
-                  <p className="text-2xl font-bold text-primary">
-                    {formatCurrency(selectedIds.size > 0 ? selectedTotals.netProfit : 0)}
-                  </p>
-                </div>
+        {/* Resumo dos selecionados */}
+        <Card className="mb-6 border-2 border-dashed border-muted">
+          <CardHeader>
+            <CardTitle>
+              Resumo dos Selecionados 
+              {(selectedCalcIds.size > 0 || selectedExpenseIds.size > 0) && 
+                ` (${selectedTotals.days} cálculos, ${selectedTotals.expenseCount} gastos)`
+              }
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Total Faturado</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {formatCurrency(selectedTotals.totalEarnings)}
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        )}
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Total KM</p>
+                <p className="text-2xl font-bold text-muted-foreground">
+                  {selectedTotals.totalKm} km
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Total Combustível</p>
+                <p className="text-2xl font-bold text-warning">
+                  {formatCurrency(selectedTotals.fuelCost)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Gastos Adicionais</p>
+                <p className="text-2xl font-bold text-destructive">
+                  {formatCurrency(selectedTotals.totalExpenses)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Lucro Líquido</p>
+                <p className="text-2xl font-bold text-success">
+                  {formatCurrency(selectedTotals.finalNetProfit)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
 
-        <Card>
+        {/* Cálculos Diários */}
+        <Card className="mb-6">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Histórico Completo</CardTitle>
+              <CardTitle>Cálculos Diários</CardTitle>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Checkbox
-                    checked={filteredCalculations.length > 0 && selectedIds.size === filteredCalculations.length}
-                    onCheckedChange={selectAll}
+                    checked={filteredCalculations.length > 0 && selectedCalcIds.size === filteredCalculations.length}
+                    onCheckedChange={selectAllCalculations}
                   />
                   <Label>Selecionar todos ({filteredCalculations.length})</Label>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {filteredCalculations.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {calculations.length === 0 
+                  ? "Nenhum cálculo encontrado. Faça sua primeira calculação!"
+                  : "Nenhum cálculo encontrado para o período selecionado."
+                }
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                {filteredCalculations.map((calculation) => (
+                  <Card key={calculation.id} className="relative">
+                    <div className="absolute top-2 left-2">
+                      <Checkbox
+                        checked={selectedCalcIds.has(calculation.id)}
+                        onCheckedChange={() => toggleCalcSelection(calculation.id)}
+                      />
+                    </div>
+                    <CardHeader className="pt-6 pb-2">
+                      <CardTitle className="text-base">{formatDate(calculation.date)}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Faturamento</span>
+                        <span className="font-medium">{formatCurrency(calculation.total_earnings)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">KM</span>
+                        <span className="font-medium">{calculation.km_driven} km</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Combustível</span>
+                        <span className="font-medium">{formatCurrency(calculation.fuel_cost)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Lucro</span>
+                        <span className={calculation.net_profit >= 0 ? "text-success font-semibold" : "text-destructive font-semibold"}>
+                          {formatCurrency(calculation.net_profit)}
+                        </span>
+                      </div>
+                      
+                      <div className="flex gap-2 pt-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => openEditDialog(calculation)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Editar Cálculo</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div>
+                                <Label htmlFor="edit-earnings">Faturamento do Dia (R$)</Label>
+                                <Input
+                                  id="edit-earnings"
+                                  type="number"
+                                  step="0.01"
+                                  value={editFormData.total_earnings}
+                                  onChange={(e) => setEditFormData(prev => ({
+                                    ...prev,
+                                    total_earnings: e.target.value
+                                  }))}
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="edit-km">KM Rodados no Dia</Label>
+                                <Input
+                                  id="edit-km"
+                                  type="number"
+                                  step="0.1"
+                                  value={editFormData.km_driven}
+                                  onChange={(e) => setEditFormData(prev => ({
+                                    ...prev,
+                                    km_driven: e.target.value
+                                  }))}
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="edit-efficiency">KM por Litro do Carro</Label>
+                                <Input
+                                  id="edit-efficiency"
+                                  type="number"
+                                  step="0.1"
+                                  value={editFormData.km_per_liter}
+                                  onChange={(e) => setEditFormData(prev => ({
+                                    ...prev,
+                                    km_per_liter: e.target.value
+                                  }))}
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="edit-fuel-price">Preço do Combustível (R$)</Label>
+                                <Input
+                                  id="edit-fuel-price"
+                                  type="number"
+                                  step="0.01"
+                                  value={editFormData.fuel_price}
+                                  onChange={(e) => setEditFormData(prev => ({
+                                    ...prev,
+                                    fuel_price: e.target.value
+                                  }))}
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <Button onClick={updateCalculation} className="flex-1">
+                                  Salvar Alterações
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  onClick={() => setEditingCalc(null)}
+                                  className="flex-1"
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => deleteCalculation(calculation.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Gastos Adicionais */}
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Gastos Adicionais</CardTitle>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={filteredExpenses.length > 0 && selectedExpenseIds.size === filteredExpenses.length}
+                    onCheckedChange={selectAllExpenses}
+                  />
+                  <Label>Selecionar todos ({filteredExpenses.length})</Label>
                 </div>
                 <Select value={countFilter} onValueChange={(value: 'all' | '7' | '15' | '30' | '50') => setCountFilter(value)}>
                   <SelectTrigger className="w-28">
@@ -351,170 +624,69 @@ const HistoryPage = () => {
             </div>
           </CardHeader>
           <CardContent>
-            {filteredCalculations.length === 0 ? (
+            {filteredExpenses.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                {calculations.length === 0 
-                  ? "Nenhum cálculo encontrado. Faça sua primeira calculação!"
-                  : "Nenhum cálculo encontrado para o período selecionado."
+                {additionalExpenses.length === 0 
+                  ? "Nenhum gasto adicional encontrado."
+                  : "Nenhum gasto adicional encontrado para o período selecionado."
                 }
               </div>
             ) : (
-              <div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-                  {filteredCalculations.map((calculation) => (
-                    <Card key={calculation.id} className="relative">
-                      <div className="absolute top-2 left-2">
-                        <Checkbox
-                          checked={selectedIds.has(calculation.id)}
-                          onCheckedChange={() => toggleSelection(calculation.id)}
-                        />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                {filteredExpenses.map((expense) => (
+                  <Card key={expense.id} className="relative border-destructive/20">
+                    <div className="absolute top-2 left-2">
+                      <Checkbox
+                        checked={selectedExpenseIds.has(expense.id)}
+                        onCheckedChange={() => toggleExpenseSelection(expense.id)}
+                      />
+                    </div>
+                    <CardHeader className="pt-6 pb-2">
+                      <CardTitle className="text-base text-destructive">{formatDate(expense.date)}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {expense.maintenance_cost > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Manutenção</span>
+                          <span className="font-medium text-destructive">-{formatCurrency(expense.maintenance_cost)}</span>
+                        </div>
+                      )}
+                      {expense.food_cost > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Alimentação</span>
+                          <span className="font-medium text-destructive">-{formatCurrency(expense.food_cost)}</span>
+                        </div>
+                      )}
+                      {expense.toll_cost > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Pedágio</span>
+                          <span className="font-medium text-destructive">-{formatCurrency(expense.toll_cost)}</span>
+                        </div>
+                      )}
+                      {expense.parking_cost > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Estacionamento</span>
+                          <span className="font-medium text-destructive">-{formatCurrency(expense.parking_cost)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm border-t pt-2">
+                        <span className="text-muted-foreground font-semibold">Total</span>
+                        <span className="font-bold text-destructive">-{formatCurrency(expense.total_cost)}</span>
                       </div>
-                      <CardHeader className="pt-6 pb-2">
-                        <CardTitle className="text-base">{formatDate(calculation.date)}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Faturamento</span>
-                          <span className="font-medium">{formatCurrency(calculation.total_earnings)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">KM</span>
-                          <span className="font-medium">{calculation.km_driven} km</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Combustível</span>
-                          <span className="font-medium">{formatCurrency(calculation.fuel_cost)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Lucro</span>
-                          <span className={calculation.net_profit >= 0 ? "text-success font-semibold" : "text-destructive font-semibold"}>
-                            {formatCurrency(calculation.net_profit)}
-                          </span>
-                        </div>
-                        
-                        {/* Additional expenses */}
-                        {(calculation.maintenance_cost && calculation.maintenance_cost > 0) && (
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Manutenção</span>
-                            <span className="text-warning">{formatCurrency(calculation.maintenance_cost)}</span>
-                          </div>
-                        )}
-                        {(calculation.food_cost && calculation.food_cost > 0) && (
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Alimentação</span>
-                            <span className="text-warning">{formatCurrency(calculation.food_cost)}</span>
-                          </div>
-                        )}
-                        {(calculation.toll_cost && calculation.toll_cost > 0) && (
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Pedágio</span>
-                            <span className="text-warning">{formatCurrency(calculation.toll_cost)}</span>
-                          </div>
-                        )}
-                        {(calculation.parking_cost && calculation.parking_cost > 0) && (
-                          <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Estacionamento</span>
-                            <span className="text-warning">{formatCurrency(calculation.parking_cost)}</span>
-                          </div>
-                        )}
-                        
-                        <div className="flex gap-2 pt-2">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex-1"
-                                onClick={() => openEditDialog(calculation)}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Editar Cálculo</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <div>
-                                  <Label htmlFor="edit-earnings">Faturamento do Dia (R$)</Label>
-                                  <Input
-                                    id="edit-earnings"
-                                    type="number"
-                                    step="0.01"
-                                    value={editFormData.total_earnings}
-                                    onChange={(e) => setEditFormData(prev => ({
-                                      ...prev,
-                                      total_earnings: e.target.value
-                                    }))}
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor="edit-km">KM Rodados no Dia</Label>
-                                  <Input
-                                    id="edit-km"
-                                    type="number"
-                                    step="0.1"
-                                    value={editFormData.km_driven}
-                                    onChange={(e) => setEditFormData(prev => ({
-                                      ...prev,
-                                      km_driven: e.target.value
-                                    }))}
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor="edit-efficiency">KM por Litro do Carro</Label>
-                                  <Input
-                                    id="edit-efficiency"
-                                    type="number"
-                                    step="0.1"
-                                    value={editFormData.km_per_liter}
-                                    onChange={(e) => setEditFormData(prev => ({
-                                      ...prev,
-                                      km_per_liter: e.target.value
-                                    }))}
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor="edit-fuel-price">Preço do Combustível (R$)</Label>
-                                  <Input
-                                    id="edit-fuel-price"
-                                    type="number"
-                                    step="0.01"
-                                    value={editFormData.fuel_price}
-                                    onChange={(e) => setEditFormData(prev => ({
-                                      ...prev,
-                                      fuel_price: e.target.value
-                                    }))}
-                                  />
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button onClick={updateCalculation} className="flex-1">
-                                    Salvar Alterações
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    onClick={() => setEditingCalc(null)}
-                                    className="flex-1"
-                                  >
-                                    Cancelar
-                                  </Button>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="flex-1"
-                            onClick={() => deleteCalculation(calculation.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                      
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => deleteAdditionalExpense(expense.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
           </CardContent>
