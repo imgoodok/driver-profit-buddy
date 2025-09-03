@@ -60,6 +60,13 @@ const HistoryPage = () => {
     km_per_liter: "",
     fuel_price: "",
   });
+  const [editingExpense, setEditingExpense] = useState<AdditionalExpense | null>(null);
+  const [editExpenseFormData, setEditExpenseFormData] = useState({
+    maintenance_cost: "",
+    food_cost: "",
+    toll_cost: "",
+    parking_cost: "",
+  });
   const { toast } = useToast();
   const navigate = useNavigate();
 

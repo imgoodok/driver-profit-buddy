@@ -298,6 +298,17 @@ const UberCalculator = () => {
   const saveAdditionalExpenses = async () => {
     if (!user) return;
     
+    // Verificar se o usuário tem acesso PRO
+    if (!subscribed) {
+      toast({
+        title: "Acesso Restrito",
+        description: "Você precisa de uma assinatura PRO para salvar gastos adicionais",
+        variant: "destructive",
+      });
+      navigate('/subscription');
+      return;
+    }
+    
     // Check if at least one additional expense has value > 0
     const hasAdditionalExpenses = Object.values(additionalExpenses).some(value => 
       value !== "" && parseFloat(value) > 0
