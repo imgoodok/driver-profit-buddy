@@ -52,6 +52,7 @@ const HistoryPage = () => {
   const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [countFilter, setCountFilter] = useState<'all' | '7' | '15' | '30' | '50'>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | '7' | '15' | '30'>('all');
   const [editingCalc, setEditingCalc] = useState<Calculation | null>(null);
   const [editFormData, setEditFormData] = useState({
     total_earnings: "",
@@ -91,8 +92,8 @@ const HistoryPage = () => {
   }, [user]);
 
   useEffect(() => {
-    applyCountFilter();
-  }, [calculations, additionalExpenses, countFilter]);
+    applyFilters();
+  }, [calculations, additionalExpenses, countFilter, dateFilter]);
 
   const fetchCalculations = async () => {
     try {
@@ -132,18 +133,36 @@ const HistoryPage = () => {
     }
   };
 
-  const applyCountFilter = () => {
-    if (countFilter === 'all') {
-      setFilteredCalculations(calculations);
-      setFilteredExpenses(additionalExpenses);
-      return;
+  const applyFilters = () => {
+    let filteredCalcs = [...calculations];
+    let filteredExps = [...additionalExpenses];
+
+    // Apply date filter
+    if (dateFilter !== 'all') {
+      const daysAgo = parseInt(dateFilter);
+      const dateLimit = new Date();
+      dateLimit.setDate(dateLimit.getDate() - daysAgo);
+      
+      filteredCalcs = filteredCalcs.filter(calc => {
+        const calcDate = new Date(calc.date);
+        return calcDate >= dateLimit;
+      });
+      
+      filteredExps = filteredExps.filter(exp => {
+        const expDate = new Date(exp.date);
+        return expDate >= dateLimit;
+      });
     }
 
-    const count = parseInt(countFilter);
-    const limitedCalcs = calculations.slice(0, count);
-    const limitedExpenses = additionalExpenses.slice(0, count);
-    setFilteredCalculations(limitedCalcs);
-    setFilteredExpenses(limitedExpenses);
+    // Apply count filter
+    if (countFilter !== 'all') {
+      const count = parseInt(countFilter);
+      filteredCalcs = filteredCalcs.slice(0, count);
+      filteredExps = filteredExps.slice(0, count);
+    }
+
+    setFilteredCalculations(filteredCalcs);
+    setFilteredExpenses(filteredExps);
   };
 
   const deleteCalculation = async (id: string) => {
@@ -437,6 +456,46 @@ const HistoryPage = () => {
         </Card>
 
 
+        {/* Filtros */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Filtros</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <Label>Quantidade:</Label>
+                <Select value={countFilter} onValueChange={(value: 'all' | '7' | '15' | '30' | '50') => setCountFilter(value)}>
+                  <SelectTrigger className="w-28">
+                    <SelectValue placeholder="Últimos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="7">7</SelectItem>
+                    <SelectItem value="15">15</SelectItem>
+                    <SelectItem value="30">30</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label>Período:</Label>
+                <Select value={dateFilter} onValueChange={(value: 'all' | '7' | '15' | '30') => setDateFilter(value)}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os períodos</SelectItem>
+                    <SelectItem value="7">Últimos 7 dias</SelectItem>
+                    <SelectItem value="15">Últimos 15 dias</SelectItem>
+                    <SelectItem value="30">Últimos 30 dias</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Cálculos Diários */}
         <Card className="mb-6">
           <CardHeader>
@@ -608,18 +667,6 @@ const HistoryPage = () => {
                   />
                   <Label>Selecionar todos ({filteredExpenses.length})</Label>
                 </div>
-                <Select value={countFilter} onValueChange={(value: 'all' | '7' | '15' | '30' | '50') => setCountFilter(value)}>
-                  <SelectTrigger className="w-28">
-                    <SelectValue placeholder="Últimos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="7">7</SelectItem>
-                    <SelectItem value="15">15</SelectItem>
-                    <SelectItem value="30">30</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
           </CardHeader>

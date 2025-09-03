@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Check, Star, Zap, CreditCard, Calendar } from "lucide-react";
+import { ArrowLeft, Check, Star, Zap, CreditCard, Calendar, X } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { User, Session } from "@supabase/supabase-js";
 import { useSubscription } from "@/hooks/use-subscription";
 
@@ -78,18 +79,25 @@ const SubscriptionPage = () => {
     }
   };
 
-  const handleManageSubscription = async () => {
-    setLoading('manage');
+  const handleCancelSubscription = async () => {
+    setLoading('cancel');
     try {
-      const { data, error } = await supabase.functions.invoke('customer-portal');
+      const { data, error } = await supabase.functions.invoke('cancel-subscription');
 
       if (error) throw error;
 
-      // Open Stripe customer portal in a new tab
-      window.open(data.url, '_blank');
+      toast({
+        title: "Assinatura cancelada",
+        description: data.message || "Sua assinatura foi cancelada com sucesso. Você manterá acesso até o final do período atual.",
+      });
+
+      // Refresh subscription status
+      setTimeout(() => {
+        checkSubscription();
+      }, 1000);
     } catch (error: any) {
       toast({
-        title: "Erro ao acessar gerenciamento",
+        title: "Erro ao cancelar assinatura",
         description: error.message || "Tente novamente em alguns instantes",
         variant: "destructive",
       });
@@ -177,14 +185,35 @@ const SubscriptionPage = () => {
                     </>
                   )}
                 </div>
-                <Button 
-                  onClick={handleManageSubscription}
-                  disabled={loading === 'manage'}
-                  className="flex items-center gap-2"
-                >
-                  <CreditCard className="w-4 h-4" />
-                  {loading === 'manage' ? 'Carregando...' : 'Gerenciar Assinatura'}
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="destructive"
+                      disabled={loading === 'cancel'}
+                      className="flex items-center gap-2"
+                    >
+                      <X className="w-4 h-4" />
+                      {loading === 'cancel' ? 'Cancelando...' : 'Cancelar Assinatura'}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancelar Assinatura</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Tem certeza que deseja cancelar sua assinatura? Você manterá acesso aos recursos PRO até {formatDate(subscription_end)}, quando sua assinatura expirará e voltará para o plano gratuito.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Não, manter assinatura</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleCancelSubscription}
+                        className="bg-destructive hover:bg-destructive/90"
+                      >
+                        Sim, cancelar assinatura
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </CardContent>
           </Card>
