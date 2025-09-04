@@ -327,23 +327,69 @@ const UberCalculator = () => {
     const food = additionalExpenses.food ? parseFloat(additionalExpenses.food) : 0;
     const toll = additionalExpenses.toll ? parseFloat(additionalExpenses.toll) : 0;
     const parking = additionalExpenses.parking ? parseFloat(additionalExpenses.parking) : 0;
-    const totalCost = maintenance + food + toll + parking;
+    
+    const currentDate = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
     
     setSavingExpenses(true);
     try {
-      const { error } = await supabase
-        .from('additional_expenses')
-        .insert({
+      // Salvar cada gasto separadamente se tiver valor
+      const expensesToInsert = [];
+      
+      if (maintenance > 0) {
+        expensesToInsert.push({
           user_id: user.id,
-          date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`,
+          date: currentDate,
           maintenance_cost: maintenance,
-          food_cost: food,
-          toll_cost: toll,
-          parking_cost: parking,
-          total_cost: totalCost,
+          food_cost: 0,
+          toll_cost: 0,
+          parking_cost: 0,
+          total_cost: maintenance,
         });
+      }
+      
+      if (food > 0) {
+        expensesToInsert.push({
+          user_id: user.id,
+          date: currentDate,
+          maintenance_cost: 0,
+          food_cost: food,
+          toll_cost: 0,
+          parking_cost: 0,
+          total_cost: food,
+        });
+      }
+      
+      if (toll > 0) {
+        expensesToInsert.push({
+          user_id: user.id,
+          date: currentDate,
+          maintenance_cost: 0,
+          food_cost: 0,
+          toll_cost: toll,
+          parking_cost: 0,
+          total_cost: toll,
+        });
+      }
+      
+      if (parking > 0) {
+        expensesToInsert.push({
+          user_id: user.id,
+          date: currentDate,
+          maintenance_cost: 0,
+          food_cost: 0,
+          toll_cost: 0,
+          parking_cost: parking,
+          total_cost: parking,
+        });
+      }
+      
+      if (expensesToInsert.length > 0) {
+        const { error } = await supabase
+          .from('additional_expenses')
+          .insert(expensesToInsert);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
       // Clear additional expenses after saving
       setAdditionalExpenses({

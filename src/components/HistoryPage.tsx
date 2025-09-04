@@ -764,35 +764,22 @@ const HistoryPage = () => {
                     <CardHeader className="pt-8 pb-3">
                       <CardTitle className="text-lg font-bold">{formatDate(calculation.date)}</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3 pb-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="text-center p-3 bg-success/10 rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">Faturamento</p>
-                          <p className="text-sm font-bold text-success">{formatCurrency(calculation.total_earnings)}</p>
-                        </div>
-                        <div className="text-center p-3 bg-muted rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">KM Rodados</p>
-                          <p className="text-sm font-bold">{calculation.km_driven} km</p>
-                        </div>
+                    <CardContent className="space-y-2 pb-4">
+                      <div className="text-center mb-3">
+                        <p className={`text-2xl font-bold ${calculation.net_profit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                          {formatCurrency(calculation.net_profit)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Lucro Líquido</p>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="text-center p-3 bg-warning/10 rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">Combustível</p>
-                          <p className="text-sm font-bold text-warning">{formatCurrency(calculation.fuel_cost)}</p>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Eficiência:</span>
+                          <span className="font-medium">{calculation.km_per_liter} km/L</span>
                         </div>
-                        <div className={`text-center p-3 rounded-lg ${calculation.net_profit >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                          <p className="text-xs text-muted-foreground mb-1">Lucro Final</p>
-                          <p className={`text-sm font-bold ${calculation.net_profit >= 0 ? 'text-success' : 'text-destructive'}`}>
-                            {formatCurrency(calculation.net_profit)}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="pt-2 border-t">
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Eficiência: {calculation.km_per_liter} km/L</span>
-                          <span>Preço: {formatCurrency(calculation.fuel_price)}/L</span>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">KM Rodados:</span>
+                          <span className="font-medium">{calculation.km_driven} km</span>
                         </div>
                       </div>
                     </CardContent>
@@ -848,51 +835,15 @@ const HistoryPage = () => {
                     <CardHeader className="pt-8 pb-3">
                       <CardTitle className="text-lg font-bold text-destructive">{formatDate(expense.date)}</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3 pb-4">
-                      <div className="grid grid-cols-1 gap-2">
-                        {expense.maintenance_cost > 0 && (
-                          <div className="flex justify-between items-center p-2 bg-destructive/10 rounded">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                              <span className="text-sm font-medium">Manutenção</span>
-                            </div>
-                            <span className="font-bold text-destructive">-{formatCurrency(expense.maintenance_cost)}</span>
-                          </div>
-                        )}
-                        {expense.food_cost > 0 && (
-                          <div className="flex justify-between items-center p-2 bg-orange-100/50 rounded">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                              <span className="text-sm font-medium">Alimentação</span>
-                            </div>
-                            <span className="font-bold text-destructive">-{formatCurrency(expense.food_cost)}</span>
-                          </div>
-                        )}
-                        {expense.toll_cost > 0 && (
-                          <div className="flex justify-between items-center p-2 bg-yellow-100/50 rounded">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                              <span className="text-sm font-medium">Pedágio</span>
-                            </div>
-                            <span className="font-bold text-destructive">-{formatCurrency(expense.toll_cost)}</span>
-                          </div>
-                        )}
-                        {expense.parking_cost > 0 && (
-                          <div className="flex justify-between items-center p-2 bg-purple-100/50 rounded">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                              <span className="text-sm font-medium">Estacionamento</span>
-                            </div>
-                            <span className="font-bold text-destructive">-{formatCurrency(expense.parking_cost)}</span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="border-t pt-3">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-muted-foreground">Total Gasto</span>
-                          <span className="text-lg font-bold text-destructive">-{formatCurrency(expense.total_cost)}</span>
-                        </div>
+                    <CardContent className="space-y-2 pb-4">
+                      <div className="text-center mb-3">
+                        <p className="text-xl font-bold text-destructive">-{formatCurrency(expense.total_cost)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {expense.maintenance_cost > 0 && "Manutenção"}
+                          {expense.food_cost > 0 && "Alimentação"}
+                          {expense.toll_cost > 0 && "Pedágio"}
+                          {expense.parking_cost > 0 && "Estacionamento"}
+                        </p>
                       </div>
                     </CardContent>
                   </Card>
